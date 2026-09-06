@@ -11,7 +11,7 @@ Build Android Players for ARM64 devices and x64 emulators. The package owns targ
 | Item | Value |
 | --- | --- |
 | Package | `infernux/platform-android` |
-| Plugin version | 0.2.1 |
+| Plugin version | 0.2.2 |
 | Engine compatibility | ==0.4.0 |
 | Target | `android-arm64 / android-x64-emulator` |
 | Build host | Windows or Linux |
@@ -83,7 +83,7 @@ README.zh-CN.md
 
 Run `python package.py dist/infernux.platform-android.inxpkg` to package locally. This standalone script uses only Python's standard library and does not require an engine installation. Build outside package/, then place the files to ship inside package/ before packaging.
 
-Maintainers run `python release.py v0.2.1` to create the archive and its release manifest. Pushing a matching version tag publishes both files through GitHub Actions. The editor uses that manifest to select a compatible release.
+Maintainers run `python release.py v0.2.2` to create the archive and its release manifest. Pushing a matching version tag publishes both files through GitHub Actions. The editor uses that manifest to select a compatible release.
 
 ## License
 

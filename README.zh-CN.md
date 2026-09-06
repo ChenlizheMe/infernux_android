@@ -11,7 +11,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 包标识 | `infernux/platform-android` |
-| 插件版本 | 0.2.1 |
+| 插件版本 | 0.2.2 |
 | 引擎兼容范围 | ==0.4.0 |
 | 构建目标 | `android-arm64 / android-x64-emulator` |
 | 构建宿主 | Windows or Linux |
@@ -79,7 +79,7 @@ README.zh-CN.md
 
 运行 `python package.py dist/infernux.platform-android.inxpkg` 本地打包。脚本仅使用 Python 标准库，不需要导入或安装 Infernux。在外层进行构建，最后将需要交付的文件放进 package/ 即可。
 
-维护者运行 `python release.py v0.2.1` 生成插件和发布清单；推送与插件版本一致的标签后，由 GitHub Actions 打包并上传两个文件。编辑器根据发布清单选择兼容版本。
+维护者运行 `python release.py v0.2.2` 生成插件和发布清单；推送与插件版本一致的标签后，由 GitHub Actions 打包并上传两个文件。编辑器根据发布清单选择兼容版本。
 
 ## 许可证
 

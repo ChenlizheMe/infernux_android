@@ -1,7 +1,8 @@
-# Infernux Android Platform 0.2.1
+# Infernux Android Platform 0.2.2
 
 Official platform package for Infernux ==0.4.0.
 
+- Routes system Back through the Player's keyboard-dismissal/gameplay policy before IME callbacks, including callbacks left behind after the keyboard is hidden.
 - Separates native debug information during CMake publication. Runtime dynamic symbols are retained; separate debug files remain in the release-engineering build tree, outside the installable plugin.
 
 - Ships precompiled ARM64 and x86_64 native Players plus the SDL Java host.
