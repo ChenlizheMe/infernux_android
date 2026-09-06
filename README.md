@@ -54,7 +54,7 @@ Disabled Import means Hub Android compatibility is not installed or incomplete. 
 ## Develop and package
 
 CMake separates native debug information into each build tree's
-`external/plugins/infernux_android/native/symbols/<configuration>/<abi>/` directory.
+`symbols/<configuration>/<abi>/` directory.
 The plugin keeps runtime dynamic symbols; original build outputs and separate
 `.debug` files remain available to maintainers.
 

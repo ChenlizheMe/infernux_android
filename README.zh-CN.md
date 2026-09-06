@@ -53,7 +53,7 @@ Gradle 缓存归 Hub 的 Shared/Cache/Gradle 管理，独立源码启动则使�
 ## 开发与打包
 
 CMake 将原生调试信息分离到构建目录下的
-`external/plugins/infernux_android/native/symbols/<configuration>/<abi>/`。
+`symbols/<configuration>/<abi>/`。
 插件保留运行时动态符号；原始编译产物及独立 `.debug` 文件供维护者排查崩溃。
 
 引擎的 Android CMake 配置已提供发布工程目标 `prebuild_android_player`。
