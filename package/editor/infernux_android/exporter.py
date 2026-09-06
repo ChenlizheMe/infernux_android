@@ -8,9 +8,7 @@ import json
 import os
 import re
 import shutil
-import stat
 import subprocess
-import sys
 import time
 import zipfile
 from pathlib import Path
@@ -32,11 +30,10 @@ from Infernux.engine.build import (
     PlatformCapabilities,
     PlatformExporter,
 )
-from Infernux.engine.build.source_library import GitSource, acquire_git_source
+from .native_payload import inspect_native_payload, stage_native_payload
 
 from .doctor import (
     ANDROID_BUILD_TOOLS,
-    ANDROID_CMAKE,
     ANDROID_GRADLE_PLUGIN,
     ANDROID_NDK,
     inspect_android_toolchain,
@@ -78,28 +75,6 @@ _ANDROID_ARCHIVE_ABIS = frozenset({"arm64-v8a", "armeabi-v7a", "x86", "x86_64"})
 _ANDROID_FORBIDDEN_DISTRIBUTIONS = frozenset(
     {"llvmlite", "numba", "torch", "torchaudio", "torchvision"}
 )
-_ANDROID_NATIVE_SOURCES = (
-    GitSource(
-        "zstd",
-        "https://github.com/facebook/zstd.git",
-        "794ea1b0afca0f020f4e57b6732332231fb23c70",
-        ("build/cmake/CMakeLists.txt", "lib/zstd.h"),
-    ),
-    GitSource(
-        "SPIRV-Cross",
-        "https://github.com/KhronosGroup/SPIRV-Cross.git",
-        "9c3c8e2cefdd8194b193bb8ed2fdff4d5527e382",
-        ("CMakeLists.txt", "spirv_cross.hpp"),
-    ),
-    GitSource(
-        "volk",
-        "https://github.com/zeux/volk.git",
-        "2e19a77ce9b5bd8df0106f66b91032c0e5c776a1",
-        ("CMakeLists.txt", "volk.h"),
-    ),
-)
-
-
 class AndroidPlatformExporter(PlatformExporter):
     @property
     def exporter_id(self) -> str:
@@ -174,6 +149,16 @@ class AndroidPlatformExporter(PlatformExporter):
                 ),
                 details,
             )
+        try:
+            payload = Path(__file__).with_name("player")
+            native = inspect_native_payload(payload, abi=abi)
+        except (OSError, ValueError) as error:
+            return CapabilityReport(False, (
+                BuildDiagnostic(DiagnosticSeverity.ERROR, "android.player.runtime-invalid",
+                                str(error), source=self.exporter_id),
+            ), details)
+        details["player_payload"] = str(payload)
+        details["native_configuration"] = native["configuration"]
         return CapabilityReport(True, toolchain.diagnostics, details)
 
     def create_plan(self, request: BuildRequest) -> BuildPlan:
@@ -187,8 +172,8 @@ class AndroidPlatformExporter(PlatformExporter):
                 BuildStep("imports", "Analyze Python imports", "analyze"),
                 BuildStep(
                     "native",
-                    f"Build Android native runtime ({architecture})",
-                    "compile",
+                    f"Stage precompiled Android runtime ({architecture})",
+                    "prepare",
                     {"abi": architecture},
                 ),
                 BuildStep("package", "Assemble Android package", "package"),
@@ -208,7 +193,7 @@ class AndroidPlatformExporter(PlatformExporter):
                 manifest={"toolchain": dict(report.details)},
             )
         details = dict(report.details)
-        source_root = Path(str(details["source_root"]))
+        engine_package = _engine_package()
         sdk_root = Path(str(details["sdk_root"]))
         abi = str(plan.metadata["abi"])
         output_root = Path(request.output_dir).resolve()
@@ -310,10 +295,10 @@ class AndroidPlatformExporter(PlatformExporter):
                 elapsed_seconds=time.perf_counter() - started,
             )
         try:
-            _stage_engine_python_package(request, staging, source_root)
+            _stage_engine_python_package(request, staging, engine_package)
             _finalize_python_runtime_identity(staging)
             game_name, sdl_orientations, android_orientation = (
-                _cook_player_content(request, staging, source_root, abi)
+                _cook_player_content(request, staging, engine_package, abi)
             )
             resolution_scaling, target_dpi = _android_resolution_contract(request)
         except (OSError, RuntimeError, ValueError) as error:
@@ -333,7 +318,6 @@ class AndroidPlatformExporter(PlatformExporter):
             )
         _configure_project(
             staging,
-            source_root,
             sdk_root,
             abi,
             python_version=python_version,
@@ -345,46 +329,8 @@ class AndroidPlatformExporter(PlatformExporter):
         )
         request.report("prepare", 1, 1, "Android SDL host project ready")
 
-        try:
-            engine_return_code, engine_logs = _build_engine_runtime(
-                request,
-                staging,
-                source_root,
-                sdk_root,
-                python_version,
-                abi,
-            )
-        except (FileNotFoundError, RuntimeError) as error:
-            return BuildResult(
-                request.target,
-                False,
-                diagnostics=(
-                    BuildDiagnostic(
-                        DiagnosticSeverity.ERROR,
-                        "android.engine.runtime-incomplete",
-                        str(error),
-                        source=self.exporter_id,
-                    ),
-                ),
-                manifest={"abi": abi, "staging": str(staging)},
-                elapsed_seconds=time.perf_counter() - started,
-            )
-        if engine_return_code != 0:
-            return BuildResult(
-                request.target,
-                False,
-                diagnostics=(
-                    BuildDiagnostic(
-                        DiagnosticSeverity.ERROR,
-                        "android.engine.cmake",
-                        f"Android engine build failed with exit code {engine_return_code}.",
-                        source=self.exporter_id,
-                    ),
-                ),
-                manifest={"abi": abi, "staging": str(staging)},
-                logs=engine_logs,
-                elapsed_seconds=time.perf_counter() - started,
-            )
+        stage_native_payload(Path(str(details["player_payload"])), staging, abi=abi)
+        request.report("native", 1, 1, f"Precompiled Android runtime staged ({abi})")
 
         gradle = Path(str(details["gradle"]))
         task_prefix = "bundle" if artifact_kind == "aab" else "assemble"
@@ -406,7 +352,7 @@ class AndroidPlatformExporter(PlatformExporter):
             ),
             source="gradle",
         )
-        logs = engine_logs + gradle_logs
+        logs = gradle_logs
         if return_code != 0:
             return BuildResult(
                 request.target,
@@ -498,9 +444,7 @@ class AndroidPlatformExporter(PlatformExporter):
                 "python": python_version,
                 "game": game_name,
                 "configuration": configuration_slug,
-                "native_configuration": _native_build_type(
-                    request.profile.configuration
-                ),
+                "native_configuration": details["native_configuration"],
                 "artifact_kind": artifact_kind,
                 "signed": release_signed,
                 "resolution_scaling": resolution_scaling,
@@ -712,7 +656,6 @@ def _android_signing_environment(request: BuildRequest) -> dict[str, str]:
 
 def _configure_project(
     project_root: Path,
-    source_root: Path,
     sdk_root: Path,
     abi: str,
     *,
@@ -724,11 +667,9 @@ def _configure_project(
     game_name: str = "Infernux Player",
 ) -> None:
     replacements = {
-        "@INFERNUX_SOURCE_ROOT@": source_root.as_posix(),
         "@ANDROID_ABI@": abi,
         "@ANDROID_BUILD_TOOLS_VERSION@": ANDROID_BUILD_TOOLS,
         "@ANDROID_NDK_VERSION@": ANDROID_NDK,
-        "@ANDROID_CMAKE_VERSION@": ANDROID_CMAKE,
         "@ANDROID_GRADLE_PLUGIN_VERSION@": ANDROID_GRADLE_PLUGIN,
         "@ANDROID_PYTHON_VERSION@": python_version,
         "@ANDROID_ORIENTATIONS@": sdl_orientations,
@@ -752,14 +693,18 @@ def _configure_project(
     )
 
 
+def _engine_package() -> Path:
+    import Infernux
+
+    return Path(Infernux.__file__).resolve().parent
+
+
 def _stage_engine_python_package(
     request: BuildRequest,
     staging: Path,
-    source_root: Path,
+    source_package: Path,
 ) -> None:
-    """Stage the shared Player Python runtime behind the Android native host."""
-
-    source_package = source_root / "python" / "Infernux"
+    """Stage shared Player Python modules from the installed engine package."""
     if not (source_package / "engine" / "platform_player_bootstrap.py").is_file():
         raise ValueError(f"Infernux Player Python sources are incomplete: {source_package}")
     site_packages = staging / "app" / "src" / "main" / "assets" / "python" / "site-packages"
@@ -788,7 +733,7 @@ def _stage_engine_python_package(
             "test",
         ),
     )
-    public_api = source_root / "python" / "infernux.py"
+    public_api = source_package.parent / "infernux.py"
     if not public_api.is_file():
         raise ValueError(f"Infernux public Python API is missing: {public_api}")
     shutil.copy2(public_api, site_packages / public_api.name)
@@ -820,6 +765,9 @@ def _stage_host_template(source: Path, staging: Path) -> None:
     Ignore new sidecars and prune stale copies left in the reusable host cache.
     """
 
+    obsolete_cpp = staging / "app/src/main/cpp"
+    if obsolete_cpp.exists():
+        shutil.rmtree(obsolete_cpp)
     shutil.copytree(
         source,
         staging,
@@ -833,7 +781,7 @@ def _stage_host_template(source: Path, staging: Path) -> None:
 def _cook_player_content(
     request: BuildRequest,
     staging: Path,
-    source_root: Path,
+    engine_package: Path,
     abi: str,
 ) -> tuple[str, str, str]:
     """Run the shared GUID-based Player cook and stage its native package."""
@@ -877,9 +825,7 @@ def _cook_player_content(
         icon = read_cooked_player_icon(
             staged_data,
             default_icon=(
-                source_root
-                / "python"
-                / "Infernux"
+                engine_package
                 / "resources"
                 / "icons"
                 / "icon.png"
@@ -1047,94 +993,6 @@ def _android_staging_directory(request: BuildRequest) -> Path:
     return _android_build_cache_root(request) / "AndroidHost" / str(request.target)
 
 
-def _android_native_source_path(
-    request: BuildRequest,
-    source_name: str,
-    source: Path,
-) -> Path:
-    """Expose Unicode Hub sources through one build-cache junction for Ninja."""
-
-    if os.name != "nt":
-        return source
-    try:
-        os.fspath(source).encode("ascii")
-        return source
-    except UnicodeEncodeError:
-        pass
-    alias = (
-        _android_build_cache_root(request)
-        / "SourceAliases"
-        / source_name
-        / source.name
-    )
-    alias.parent.mkdir(parents=True, exist_ok=True)
-    if alias.exists():
-        try:
-            if os.path.samefile(alias, source):
-                return alias
-        except OSError:
-            pass
-        raise RuntimeError(
-            f"Android source alias does not target the canonical Hub source: {alias}"
-        )
-    command = subprocess.list2cmdline(("mklink", "/J", str(alias), str(source)))
-    result = subprocess.run(
-        ["cmd.exe", "/d", "/c", command],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    if result.returncode != 0 or not alias.is_dir():
-        raise RuntimeError(
-            "Android Ninja requires an ASCII build alias for the canonical Hub "
-            f"source ({source_name}): {result.stdout.strip()}"
-        )
-    return alias
-
-
-def _prepare_android_cmake_build_root(
-    request: BuildRequest,
-    build_root: Path,
-    native_sources: dict[str, Path],
-) -> Path:
-    """Keep Ninja state only while every canonical CMake source input is stable."""
-
-    cache_root = _android_build_cache_root(request).resolve()
-    resolved_build = build_root.resolve()
-    if not resolved_build.is_relative_to(cache_root) or resolved_build == cache_root:
-        raise RuntimeError(f"Android build root escapes its cache: {resolved_build}")
-    identity = {
-        "engine": str(Path(__file__).resolve().parents[6]),
-        "sources": {
-            name: str(path.resolve()) for name, path in sorted(native_sources.items())
-        },
-    }
-    stamp = build_root / ".infernux-cmake-inputs.json"
-    try:
-        current = json.loads(stamp.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        current = None
-    if build_root.exists() and current != identity:
-        def remove_read_only(function, entry, _error) -> None:
-            os.chmod(entry, stat.S_IWRITE)
-            function(entry)
-
-        shutil.rmtree(build_root, onexc=remove_read_only)
-    build_root.mkdir(parents=True, exist_ok=True)
-    temporary = stamp.with_suffix(".tmp")
-    temporary.write_text(
-        json.dumps(identity, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    os.replace(temporary, stamp)
-    return build_root
-
-
 def _stage_python_runtime(
     request: BuildRequest,
     staging: Path,
@@ -1176,13 +1034,12 @@ def _stage_python_runtime(
     if not python_library.is_file():
         raise ValueError(f"Android Python {version} shared library is missing: {prefix}")
 
-    staged_include = staging / "app" / "src" / "main" / "python" / "include" / f"python{version}"
     staged_python = staging / "app" / "src" / "main" / "assets" / "python"
+    obsolete_headers = staging / "app/src/main/python"
+    if obsolete_headers.exists():
+        shutil.rmtree(obsolete_headers)
     staged_library = staged_python / "lib" / f"python{version}"
     native_library = staging / "app" / "src" / "main" / "jniLibs" / abi
-    request.report("python-runtime", 0, 4, f"Staging Android Python {version} headers")
-    shutil.rmtree(staged_include.parent.parent, ignore_errors=True)
-    shutil.copytree(include_root, staged_include)
     request.report("python-runtime", 1, 4, f"Staging Android Python {version} standard library")
     shutil.rmtree(staged_python, ignore_errors=True)
     shutil.copytree(
@@ -1364,178 +1221,6 @@ def _extract_wheel(
                     shutil.copyfileobj(source, output)
     except (OSError, zipfile.BadZipFile) as error:
         raise ValueError(f"Android Python wheel is unreadable: {wheel}") from error
-
-
-def _build_engine_runtime(
-    request: BuildRequest,
-    staging: Path,
-    source_root: Path,
-    sdk_root: Path,
-    python_version: str,
-    abi: str,
-) -> tuple[int, tuple[str, ...]]:
-    """Cross-build the native Python module and stage its Android dependencies."""
-
-    executable_suffix = ".exe" if os.name == "nt" else ""
-    cmake = sdk_root / "cmake" / ANDROID_CMAKE / "bin" / f"cmake{executable_suffix}"
-    ninja = sdk_root / "cmake" / ANDROID_CMAKE / "bin" / f"ninja{executable_suffix}"
-    ndk_root = sdk_root / "ndk" / ANDROID_NDK
-    python_include = (
-        staging
-        / "app"
-        / "src"
-        / "main"
-        / "python"
-        / "include"
-        / f"python{python_version}"
-    )
-    python_library = (
-        staging
-        / "app"
-        / "src"
-        / "main"
-        / "jniLibs"
-        / abi
-        / f"libpython{python_version}.so"
-    )
-    pybind11_dir = _host_pybind11_cmake_dir()
-    build_type = _native_build_type(request.profile.configuration)
-    build_root = _android_build_cache_root(request) / "AndroidEngine" / abi / build_type
-    native_sources = {
-        source.name: _android_native_source_path(
-            request,
-            source.name,
-            acquire_git_source(request, source),
-        )
-        for source in _ANDROID_NATIVE_SOURCES
-    }
-    _prepare_android_cmake_build_root(request, build_root, native_sources)
-    configure_command = [
-        str(cmake),
-        "-S",
-        str(source_root),
-        "-B",
-        str(build_root),
-        "-G",
-        "Ninja",
-        f"-DCMAKE_MAKE_PROGRAM={ninja}",
-        f"-DCMAKE_TOOLCHAIN_FILE={ndk_root / 'build' / 'cmake' / 'android.toolchain.cmake'}",
-        f"-DANDROID_ABI={abi}",
-        "-DANDROID_PLATFORM=android-26",
-        f"-DCMAKE_BUILD_TYPE={build_type}",
-        f"-DINFERNUX_HOST_PYTHON_EXECUTABLE={sys.executable}",
-        f"-DPython3_EXECUTABLE={sys.executable}",
-        f"-Dpybind11_DIR={pybind11_dir}",
-        "-DINFERNUX_USE_TARGET_PYTHON=ON",
-        f"-DINFERNUX_TARGET_PYTHON_INCLUDE_DIR={python_include}",
-        f"-DINFERNUX_TARGET_PYTHON_LIBRARY={python_library}",
-        f"-DINFERNUX_PYTHON_SYNC_DIR={build_root / 'python-sync'}",
-        "-DINFERNUX_BUILD_PLAYER_HOST=OFF",
-        "-DINFERNUX_BUILD_TESTS=OFF",
-        "-DINFERNUX_RELEASE_LTO=OFF",
-        "-DINFERNUX_ENABLE_VULKAN_VALIDATION=OFF",
-        f"-DINFERNUX_ZSTD_SOURCE_DIR={native_sources['zstd']}",
-        f"-DINFERNUX_SPIRV_CROSS_SOURCE_DIR={native_sources['SPIRV-Cross']}",
-        f"-DINFERNUX_VOLK_SOURCE_DIR={native_sources['volk']}",
-    ]
-    environment = {
-        **os.environ,
-        "ANDROID_SDK_ROOT": str(sdk_root),
-        "ANDROID_HOME": str(sdk_root),
-    }
-    request.report("native", 0, 2, f"Configuring Android engine ({abi})")
-    return_code, configure_logs = _run_command(
-        request,
-        configure_command,
-        source_root,
-        environment,
-        source="cmake",
-    )
-    if return_code != 0:
-        return return_code, configure_logs
-
-    request.report("native", 1, 2, f"Building Android engine ({abi})")
-    return_code, build_logs = _run_command(
-        request,
-        [str(cmake), "--build", str(build_root), "--target", "_Infernux"],
-        source_root,
-        environment,
-        source="cmake",
-    )
-    logs = configure_logs + build_logs
-    if return_code != 0:
-        return return_code, logs
-
-    _stage_engine_native_libraries(build_root, staging, abi)
-    request.report("native", 2, 2, f"Android engine runtime staged ({abi})")
-    return 0, logs
-
-
-def _native_build_type(configuration: BuildConfiguration) -> str:
-    """Select an optimized native runtime while retaining development symbols."""
-
-    # A development Player must remain representative of shipped gameplay.
-    # RelWithDebInfo keeps native symbols and frame diagnostics without the
-    # unoptimised C++ runtime cost of a CMake Debug build on physical devices.
-    if configuration is BuildConfiguration.RELEASE:
-        return "Release"
-    return "RelWithDebInfo"
-
-
-def _host_pybind11_cmake_dir() -> Path:
-    try:
-        import pybind11
-    except ImportError as error:
-        raise RuntimeError(
-            "The host Python environment must provide pybind11 to build Android."
-        ) from error
-    return Path(pybind11.get_cmake_dir()).resolve()
-
-
-def _stage_engine_native_libraries(
-    build_root: Path,
-    staging: Path,
-    abi: str,
-) -> tuple[Path, ...]:
-    native_root = staging / "app" / "src" / "main" / "jniLibs" / abi
-    native_root.mkdir(parents=True, exist_ok=True)
-    engine_names = {
-        "_Infernux.so",
-        "_InfernuxBootstrap.so",
-        "libassimp.so",
-        "libJolt.so",
-    }
-    for path in (build_root / "python-sync").glob("*.so"):
-        if path.name != "libSDL3.so":
-            engine_names.add(path.name)
-    for stale in native_root.glob("*.so"):
-        if stale.name in engine_names or stale.name.startswith("libInfernux"):
-            stale.unlink()
-
-    candidates: dict[str, Path] = {}
-    for path in (build_root / "python-sync").glob("*.so"):
-        # The Android host owns SDL and links the exact same source target into
-        # libmain.so. Staging the engine build's SDL beside that target gives
-        # AGP two producers for one JNI library and must fail the package.
-        if path.name != "libSDL3.so":
-            candidates[path.name] = path
-    for name in ("libassimp.so", "libJolt.so"):
-        matches = tuple(build_root.rglob(name))
-        if matches:
-            candidates[name] = matches[0]
-    required = {"_Infernux.so", "libassimp.so", "libJolt.so"}
-    missing = sorted(required.difference(candidates))
-    if missing:
-        raise FileNotFoundError(
-            "Android engine build did not produce required libraries: "
-            + ", ".join(missing)
-        )
-    staged: list[Path] = []
-    for name, source in sorted(candidates.items()):
-        destination = native_root / name
-        shutil.copy2(source, destination)
-        staged.append(destination)
-    return tuple(staged)
 
 
 def _python_runtime_identity(

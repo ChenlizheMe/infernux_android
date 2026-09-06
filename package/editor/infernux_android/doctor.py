@@ -35,7 +35,6 @@ def inspect_android_toolchain(
         "target": str(target_id),
         "android_api": ANDROID_API,
         "build_tools_version": ANDROID_BUILD_TOOLS,
-        "cmake_version": ANDROID_CMAKE,
         "ndk_version": ANDROID_NDK,
         "jdk_major": ANDROID_JDK_MAJOR,
         "android_gradle_plugin_version": ANDROID_GRADLE_PLUGIN,
@@ -46,8 +45,6 @@ def inspect_android_toolchain(
     java_home = _environment_path(values, "JAVA_HOME")
     details["sdk_root"] = str(sdk_root) if sdk_root else ""
     details["java_home"] = str(java_home) if java_home else ""
-    source_root = _source_root(values)
-    details["source_root"] = str(source_root) if source_root else ""
 
     if sdk_root is None:
         diagnostics.append(
@@ -67,12 +64,6 @@ def inspect_android_toolchain(
             sdk_root / "build-tools" / ANDROID_BUILD_TOOLS,
             "android.sdk.build-tools",
             f"Install Android build-tools {ANDROID_BUILD_TOOLS}.",
-            diagnostics,
-        )
-        _require_directory(
-            sdk_root / "cmake" / ANDROID_CMAKE,
-            "android.sdk.cmake",
-            f"Install Android CMake {ANDROID_CMAKE}.",
             diagnostics,
         )
         ndk_root = sdk_root / "ndk" / ANDROID_NDK
@@ -118,34 +109,15 @@ def inspect_android_toolchain(
                 )
             )
 
-    if source_root is None:
-        diagnostics.append(
-            _error(
-                "android.source.checkout",
-                "Set INFERNUX_SOURCE_ROOT to an Infernux source checkout for Android host bring-up.",
-            )
-        )
+    gradle_home = _environment_path(values, "INFERNUX_GRADLE_HOME", "GRADLE_HOME")
+    if gradle_home is None:
+        diagnostics.append(_error("android.gradle.environment",
+                                  "Install Android compatibility through Infernux Hub."))
     else:
-        _require_file(
-            source_root / "CMakeLists.txt",
-            "android.source.root",
-            "INFERNUX_SOURCE_ROOT is not an Infernux source checkout.",
-            diagnostics,
-        )
-        _require_file(
-            source_root / "external" / "SDL" / "CMakeLists.txt",
-            "android.source.sdl",
-            "The Infernux source checkout does not contain SDL3 sources.",
-            diagnostics,
-        )
-        gradle = _gradle_command(values, source_root)
+        gradle = gradle_home / "bin" / ("gradle.bat" if os.name == "nt" else "gradle")
         details["gradle"] = str(gradle)
-        _require_file(
-            gradle,
-            "android.gradle.launcher",
-            "Install Gradle 8.12 or restore the SDL3 Gradle wrapper.",
-            diagnostics,
-        )
+        _require_file(gradle, "android.gradle.launcher",
+                      "The Android compatibility kit has no Gradle launcher.", diagnostics)
 
     return CapabilityReport(
         not any(item.severity is DiagnosticSeverity.ERROR for item in diagnostics),
@@ -160,33 +132,6 @@ def _environment_path(values: Mapping[str, str], *names: str) -> Path | None:
         if value:
             return Path(value).expanduser().resolve()
     return None
-
-
-def _source_root(values: Mapping[str, str]) -> Path | None:
-    explicit = _environment_path(values, "INFERNUX_SOURCE_ROOT")
-    if explicit is not None:
-        return explicit
-    path = Path(__file__).resolve()
-    for parent in path.parents:
-        if (
-            (parent / "CMakeLists.txt").is_file()
-            and (parent / "external" / "SDL" / "CMakeLists.txt").is_file()
-        ):
-            return parent
-    return None
-
-
-def _gradle_command(values: Mapping[str, str], source_root: Path) -> Path:
-    gradle_home = _environment_path(values, "INFERNUX_GRADLE_HOME", "GRADLE_HOME")
-    if gradle_home is not None:
-        return gradle_home / "bin" / ("gradle.bat" if os.name == "nt" else "gradle")
-    return (
-        source_root
-        / "external"
-        / "SDL"
-        / "android-project"
-        / ("gradlew.bat" if os.name == "nt" else "gradlew")
-    )
 
 
 def _avd_home(values: Mapping[str, str]) -> Path | None:

@@ -7,7 +7,7 @@ endif()
 set(_android_plugin "${CMAKE_CURRENT_LIST_DIR}/..")
 set(_android_player "${_android_plugin}/package/editor/infernux_android/player/${ANDROID_ABI}")
 add_library(InfernuxAndroidHost SHARED
-    "${_android_plugin}/package/editor/infernux_android/templates/host/app/src/main/cpp/main.cpp")
+    "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 set_target_properties(InfernuxAndroidHost PROPERTIES OUTPUT_NAME main)
 target_compile_features(InfernuxAndroidHost PRIVATE cxx_std_17)
 target_link_libraries(InfernuxAndroidHost PRIVATE SDL3::SDL3 InfernuxTargetPython log)
@@ -51,3 +51,10 @@ add_custom_target(prebuild_android_player
     DEPENDS ${_android_player_targets}
     COMMENT "Publishing precompiled Android Player directly into its plugin"
     COMMAND_EXPAND_LISTS VERBATIM)
+
+# Invoke after both ABI build trees have published their native payloads.
+add_custom_target(package_android_plugin
+    COMMAND "${Python3_EXECUTABLE}" "${_android_plugin}/release.py"
+    DEPENDS prebuild_android_player
+    COMMENT "Packaging the complete Android InxPackage in its subrepository"
+    VERBATIM)

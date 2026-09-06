@@ -4,11 +4,57 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import shutil
+from runpy import run_path
+from unittest.mock import patch
 
 import release
 
 
 class ReleaseTests(unittest.TestCase):
+    def setUp(self):
+        workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(workspace.cleanup)
+        self.root = Path(workspace.name) / "repository"
+        source = Path(__file__).resolve().parents[1]
+        shutil.copytree(source / "package", self.root / "package", ignore=shutil.ignore_patterns("player"))
+        self.player = self.root / "package/editor/infernux_android/player"
+        libraries = run_path(str(self.player.parent / "native_payload.py"))["NATIVE_LIBRARIES"]
+        for abi, machine in (("arm64-v8a", 183), ("x86_64", 62)):
+            native = self.player / abi / "jniLibs"
+            native.mkdir(parents=True)
+            header = b"\x7fELF\x02\x01" + bytes(12) + machine.to_bytes(2, "little")
+            for name in libraries:
+                (native / name).write_bytes(header)
+            (native.parent / "Player.inxmanifest").write_text(json.dumps({
+                "engine_version": "0.4.0", "platform": "android", "abi": abi,
+                "python_abi": "cp313", "minimum_api": 26, "configuration": "Release",
+            }), encoding="utf-8")
+        java = self.player / "java/org/libsdl/app/SDLActivity.java"
+        java.parent.mkdir(parents=True)
+        java.write_text("// fixture", encoding="utf-8")
+        for module in (release, release.package):
+            override = patch.object(module, "__file__", str(self.root / Path(module.__file__).name))
+            override.start()
+            self.addCleanup(override.stop)
+
+    def test_release_requires_both_abis(self):
+        (self.player / "x86_64/jniLibs/libmain.so").unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.build_release()
+        self.assertFalse((self.root / "dist").exists())
+
+    def test_release_rejects_wrong_elf_architecture(self):
+        (self.player / "x86_64/jniLibs/libmain.so").write_bytes(
+            (self.player / "arm64-v8a/jniLibs/libmain.so").read_bytes())
+        with self.assertRaisesRegex(ValueError, "ELF ABI"):
+            release.build_release()
+
+    def test_cmake_entry_produces_no_zip(self):
+        artifact, manifest = release.build_release()
+        self.assertEqual(set((self.root / "dist").iterdir()), {artifact, manifest})
+        self.assertEqual(artifact.suffix, ".inxpkg")
+
     def test_package_and_manifest(self):
         root = Path(__file__).resolve().parents[1]
         source = json.loads((root / "package/inx_package.json").read_text(encoding="utf-8"))

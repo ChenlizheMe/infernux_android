@@ -2,17 +2,17 @@
 
 ![Build workflow](media/overview.png)
 
-Build Android Players for ARM64 devices and x64 emulators. The package owns target registration, toolchain diagnostics, Android host templates and APK/AAB export. Large reusable dependencies belong to the Hub's Android Platform Kit, not individual projects.
+Build Android Players for ARM64 devices and x64 emulators. The package owns target registration, precompiled native Players, SDL host files and APK/AAB export. Large reusable dependencies belong to the Hub's Android Platform Kit, not individual projects.
 
 ## Before building
 
-Infernux 0.4.0 on Windows or Linux, Hub Android compatibility, and an Infernux source checkout with its submodules. Set INFERNUX_SOURCE_ROOT to that checkout. This version still builds the Android native host from engine sources; the plugin alone is not a source-free Android build SDK.
+Install Infernux 0.4.0, Android compatibility in Hub, and the complete Android platform plugin. The plugin includes precompiled ARM64/x86_64 Player libraries and SDL Java host files. Normal APK/AAB exports do not require an engine source checkout, Git submodules, CMake, or host-side pybind11.
 
 ## Shared dependencies
 
 Install **Android compatibility** in **Hub → Installations** before importing the plugin. The editor keeps Import disabled until the shared kit is installed. This prerequisite is deliberate, not an import-time download of SDKs. The kit is distributed through the Hub release channel separately from this plugin's Release assets; plugin publication does not publish the kit.
 
-The current kit uses JDK 17, Gradle 8.12, Android API 36, build-tools 36.0.0, CMake 3.30.5, NDK 29.0.14206865 and both Android CPython 3.13 target runtimes. The plugin's requirements.txt installs pinned host-side pybind11 on import. An emulator and AVD are separate from a physical-device build.
+The current kit uses JDK 17, Gradle 8.12, Android API 36, build-tools 36.0.0, NDK 29.0.14206865 and both Android CPython 3.13 target runtimes. An emulator and AVD are separate from a physical-device build.
 
 ## Build and install
 
@@ -28,4 +28,4 @@ Gradle caches use Shared/Cache/Gradle under Hub, or the project's Cache/Gradle f
 
 ## Troubleshooting
 
-Disabled Import means Hub Android compatibility is not installed or incomplete. Missing source checkout, SDK, CPython or Gradle diagnostics must be fixed before building. If the Hub channel does not yet contain a compatible kit, this plugin Release cannot replace it.
+Disabled Import means Hub Android compatibility is not installed or incomplete. Resolve SDK, CPython, Gradle or incomplete plugin payload diagnostics before building; use a plugin release matching engine 0.4.0. If the Hub channel does not yet contain a compatible kit, this plugin Release cannot replace it.
