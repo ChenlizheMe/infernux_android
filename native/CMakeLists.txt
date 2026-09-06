@@ -1,0 +1,50 @@
+# Release-engineering target: compile the host and engine with one SDL producer.
+# Ordinary Android exports consume this payload; they do not invoke this target.
+if(NOT ANDROID)
+    return()
+endif()
+
+set(_android_plugin "${CMAKE_CURRENT_LIST_DIR}/..")
+set(_android_player "${_android_plugin}/package/editor/infernux_android/player/${ANDROID_ABI}")
+add_library(InfernuxAndroidHost SHARED
+    "${_android_plugin}/package/editor/infernux_android/templates/host/app/src/main/cpp/main.cpp")
+set_target_properties(InfernuxAndroidHost PROPERTIES OUTPUT_NAME main)
+target_compile_features(InfernuxAndroidHost PRIVATE cxx_std_17)
+target_link_libraries(InfernuxAndroidHost PRIVATE SDL3::SDL3 InfernuxTargetPython log)
+
+set(_android_player_targets
+    InfernuxAndroidHost _Infernux _InfernuxBootstrap
+    ${INFERNUX_RUNTIME_DLL_TARGETS} SDL3-shared assimp Jolt)
+set(_android_player_files)
+foreach(_target IN LISTS _android_player_targets)
+    list(APPEND _android_player_files "$<TARGET_FILE:${_target}>")
+endforeach()
+
+# libc++ is needed only when the selected NDK build uses the shared STL.
+if(CMAKE_ANDROID_STL_TYPE STREQUAL "c++_shared")
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" --target=${CMAKE_CXX_COMPILER_TARGET}
+            -print-file-name=libc++_shared.so
+        OUTPUT_VARIABLE _android_cxx_runtime OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY)
+    if(NOT EXISTS "${_android_cxx_runtime}")
+        message(FATAL_ERROR "The selected Android NDK has no shared C++ runtime")
+    endif()
+    list(APPEND _android_player_files "${_android_cxx_runtime}")
+endif()
+
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/android-player-$<CONFIG>.json"
+    CONTENT "{\n  \"engine_version\": \"${INFERNUX_PACKAGE_VERSION}\",\n  \"platform\": \"android\",\n  \"abi\": \"${ANDROID_ABI}\",\n  \"python_abi\": \"cp313\",\n  \"minimum_api\": 26,\n  \"configuration\": \"$<CONFIG>\"\n}\n")
+add_custom_target(prebuild_android_player
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_android_player}/jniLibs"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        ${_android_player_files} "${_android_player}/jniLibs"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/android-player-$<CONFIG>.json"
+        "${_android_player}/Player.inxmanifest"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/external/SDL/android-project/app/src/main/java"
+        "${_android_plugin}/package/editor/infernux_android/player/java"
+    DEPENDS ${_android_player_targets}
+    COMMENT "Publishing precompiled Android Player directly into its plugin"
+    COMMAND_EXPAND_LISTS VERBATIM)

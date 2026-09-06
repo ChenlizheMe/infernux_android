@@ -53,6 +53,14 @@ Disabled Import means Hub Android compatibility is not installed or incomplete. 
 
 ## Develop and package
 
+The engine's Android CMake configuration now exposes `prebuild_android_player`
+for release engineering. It builds the native host and engine with one SDL target
+and writes the ABI-specific libraries directly to
+`package/editor/infernux_android/player/<abi>/jniLibs/`, with shared SDL Java sources
+under `player/java/`. Screen orientation is supplied through the game's manifest,
+not compiled into the host. This target alone does not yet constitute a complete
+plugin release; the consumer export migration is still in progress.
+
 Only `package/` becomes the InxPackage payload. The outer README, SVG illustration sources, release automation and build scripts remain repository files. In-editor documentation is separate, under `package/plugin_pages/`.
 
 ```text

@@ -1,4 +1,5 @@
 /dist/
+/package/editor/infernux_android/player/
 *.inxpkg
 __pycache__/
 *.py[cod]

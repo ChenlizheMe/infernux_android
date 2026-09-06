@@ -72,7 +72,7 @@ public final class InfernuxActivity extends SDLActivity {
                 Os.setenv("_INFERNUX_PLAYER_PROFILE_FRAMES", "1", true);
                 Log.i(LOG_TAG, "INFERNUX_ANDROID_FRAME_PROFILE enabled by launch intent");
             }
-            configureResolutionScaling();
+            configurePlayerDisplay();
             Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
         } catch (IOException | ErrnoException | PackageManager.NameNotFoundException exception) {
             throw new IllegalStateException("Failed to prepare embedded Python", exception);
@@ -106,12 +106,18 @@ public final class InfernuxActivity extends SDLActivity {
         return playerData;
     }
 
-    private void configureResolutionScaling()
+    private void configurePlayerDisplay()
             throws ErrnoException, PackageManager.NameNotFoundException {
         ApplicationInfo applicationInfo = getPackageManager().getApplicationInfo(
                 getPackageName(),
                 PackageManager.GET_META_DATA);
         Bundle metadata = applicationInfo.metaData;
+        String orientations = metadata != null
+                ? metadata.getString("infernux.orientations") : null;
+        if (orientations == null || orientations.isEmpty()) {
+            throw new IllegalStateException("Android Player orientation policy is missing");
+        }
+        Os.setenv("INFERNUX_ANDROID_ORIENTATIONS", orientations, true);
         String mode = metadata != null
                 ? metadata.getString("infernux.resolution_scaling", "fixed_dpi")
                 : "fixed_dpi";

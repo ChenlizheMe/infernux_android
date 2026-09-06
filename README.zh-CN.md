@@ -52,6 +52,12 @@ Gradle 缓存归 Hub 的 Shared/Cache/Gradle 管理，独立源码启动则使�
 
 ## 开发与打包
 
+引擎的 Android CMake 配置已提供发布工程目标 `prebuild_android_player`。
+它让原生启动器与引擎共用同一份 SDL，将对应 ABI 的库直接生成到
+`package/editor/infernux_android/player/<abi>/jniLibs/`，SDL Java 源码放在
+`player/java/`。屏幕方向由游戏清单传入，不再写死在原生编译常量中。
+这个目标本身尚不等于完整插件交付；用户导出链路的迁移仍在进行。
+
 只有 `package/` 内的内容进入 InxPackage。外层 README、SVG 配图源文件、发布流程和构建脚本属于仓库，不进入插件。引擎内文档独立位于 `package/plugin_pages/`。
 
 ```text

@@ -4,10 +4,6 @@
 
 #include <string>
 
-#ifndef INFERNUX_ANDROID_ORIENTATIONS
-#define INFERNUX_ANDROID_ORIENTATIONS "LandscapeLeft LandscapeRight"
-#endif
-
 namespace
 {
 bool initialize_python()
@@ -115,7 +111,12 @@ int main(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    if (!SDL_SetHint(SDL_HINT_ORIENTATIONS, INFERNUX_ANDROID_ORIENTATIONS)) {
+    const char *orientations = SDL_getenv("INFERNUX_ANDROID_ORIENTATIONS");
+    if (orientations == nullptr || *orientations == '\0') {
+        SDL_Log("Infernux Android host has no authored orientation policy");
+        return 1;
+    }
+    if (!SDL_SetHint(SDL_HINT_ORIENTATIONS, orientations)) {
         SDL_Log("Infernux Android host could not apply its orientation policy");
     }
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {

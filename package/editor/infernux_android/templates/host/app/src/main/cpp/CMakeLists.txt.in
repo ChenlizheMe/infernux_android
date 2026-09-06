@@ -17,9 +17,6 @@ add_subdirectory(
 
 add_library(main SHARED main.cpp)
 target_compile_features(main PRIVATE cxx_std_17)
-target_compile_definitions(main PRIVATE
-    INFERNUX_ANDROID_ORIENTATIONS="@ANDROID_ORIENTATIONS@"
-)
 set(_infernux_python_version "@ANDROID_PYTHON_VERSION@")
 set(_infernux_python_include
     "${CMAKE_CURRENT_SOURCE_DIR}/../python/include/python${_infernux_python_version}")

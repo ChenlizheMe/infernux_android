@@ -22,6 +22,9 @@
         android:roundIcon="@mipmap/infernux_launcher"
         android:theme="@style/AppTheme">
         <meta-data
+            android:name="infernux.orientations"
+            android:value="@ANDROID_ORIENTATIONS@" />
+        <meta-data
             android:name="infernux.resolution_scaling"
             android:value="@ANDROID_RESOLUTION_SCALING@" />
         <meta-data
