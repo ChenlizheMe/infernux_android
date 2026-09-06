@@ -15,6 +15,9 @@ target_link_libraries(InfernuxAndroidHost PRIVATE SDL3::SDL3 InfernuxTargetPytho
 set(_android_player_targets
     InfernuxAndroidHost _Infernux _InfernuxBootstrap
     ${INFERNUX_RUNTIME_DLL_TARGETS} SDL3-shared assimp Jolt)
+if(INFERNUX_VULKAN_LOADER_TARGET)
+    list(APPEND _android_player_targets ${INFERNUX_VULKAN_LOADER_TARGET})
+endif()
 set(_android_player_files)
 foreach(_target IN LISTS _android_player_targets)
     list(APPEND _android_player_files "$<TARGET_FILE:${_target}>")
