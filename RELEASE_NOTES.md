@@ -1,6 +1,8 @@
-# Infernux Android Platform 0.2.0
+# Infernux Android Platform 0.2.1
 
 Official platform package for Infernux ==0.4.0.
+
+- Separates native debug information during CMake publication. Runtime dynamic symbols are retained; separate debug files remain in the release-engineering build tree, outside the installable plugin.
 
 - Ships precompiled ARM64 and x86_64 native Players plus the SDL Java host.
 - Assembles APK/AAB exports without engine sources, CMake or native compilation.

@@ -39,9 +39,12 @@ endif()
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/android-player-$<CONFIG>.json"
     CONTENT "{\n  \"engine_version\": \"${INFERNUX_PACKAGE_VERSION}\",\n  \"platform\": \"android\",\n  \"abi\": \"${ANDROID_ABI}\",\n  \"python_abi\": \"cp313\",\n  \"minimum_api\": 26,\n  \"configuration\": \"$<CONFIG>\"\n}\n")
 add_custom_target(prebuild_android_player
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_android_player}/jniLibs"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        ${_android_player_files} "${_android_player}/jniLibs"
+    COMMAND "${CMAKE_COMMAND}"
+        "-DPLAYER_FILES=$<JOIN:${_android_player_files},|>"
+        "-DPLAYER_DIR=${_android_player}"
+        "-DSYMBOLS_DIR=${CMAKE_CURRENT_BINARY_DIR}/symbols/$<CONFIG>/${ANDROID_ABI}"
+        "-DOBJCOPY=${CMAKE_OBJCOPY}" "-DSTRIP=${CMAKE_STRIP}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/publish_libraries.cmake"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_CURRENT_BINARY_DIR}/android-player-$<CONFIG>.json"
         "${_android_player}/Player.inxmanifest"

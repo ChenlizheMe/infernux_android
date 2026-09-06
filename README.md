@@ -11,7 +11,7 @@ Build Android Players for ARM64 devices and x64 emulators. The package owns targ
 | Item | Value |
 | --- | --- |
 | Package | `infernux/platform-android` |
-| Plugin version | 0.2.0 |
+| Plugin version | 0.2.1 |
 | Engine compatibility | ==0.4.0 |
 | Target | `android-arm64 / android-x64-emulator` |
 | Build host | Windows or Linux |
@@ -53,6 +53,11 @@ Disabled Import means Hub Android compatibility is not installed or incomplete. 
 
 ## Develop and package
 
+CMake separates native debug information into each build tree's
+`external/plugins/infernux_android/native/symbols/<configuration>/<abi>/` directory.
+The plugin keeps runtime dynamic symbols; original build outputs and separate
+`.debug` files remain available to maintainers.
+
 The engine's Android CMake configuration now exposes `prebuild_android_player`
 for release engineering. It builds the native host and engine with one SDL target
 and writes the ABI-specific libraries directly to
@@ -78,7 +83,7 @@ README.zh-CN.md
 
 Run `python package.py dist/infernux.platform-android.inxpkg` to package locally. This standalone script uses only Python's standard library and does not require an engine installation. Build outside package/, then place the files to ship inside package/ before packaging.
 
-Maintainers run `python release.py v0.2.0` to create the archive and its release manifest. Pushing a matching version tag publishes both files through GitHub Actions. The editor uses that manifest to select a compatible release.
+Maintainers run `python release.py v0.2.1` to create the archive and its release manifest. Pushing a matching version tag publishes both files through GitHub Actions. The editor uses that manifest to select a compatible release.
 
 ## License
 

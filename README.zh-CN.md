@@ -11,7 +11,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 包标识 | `infernux/platform-android` |
-| 插件版本 | 0.2.0 |
+| 插件版本 | 0.2.1 |
 | 引擎兼容范围 | ==0.4.0 |
 | 构建目标 | `android-arm64 / android-x64-emulator` |
 | 构建宿主 | Windows or Linux |
@@ -52,6 +52,10 @@ Gradle 缓存归 Hub 的 Shared/Cache/Gradle 管理，独立源码启动则使�
 
 ## 开发与打包
 
+CMake 将原生调试信息分离到构建目录下的
+`external/plugins/infernux_android/native/symbols/<configuration>/<abi>/`。
+插件保留运行时动态符号；原始编译产物及独立 `.debug` 文件供维护者排查崩溃。
+
 引擎的 Android CMake 配置已提供发布工程目标 `prebuild_android_player`。
 它让原生启动器与引擎共用同一份 SDL，将对应 ABI 的库直接生成到
 `package/editor/infernux_android/player/<abi>/jniLibs/`，SDL Java 源码放在
@@ -75,7 +79,7 @@ README.zh-CN.md
 
 运行 `python package.py dist/infernux.platform-android.inxpkg` 本地打包。脚本仅使用 Python 标准库，不需要导入或安装 Infernux。在外层进行构建，最后将需要交付的文件放进 package/ 即可。
 
-维护者运行 `python release.py v0.2.0` 生成插件和发布清单；推送与插件版本一致的标签后，由 GitHub Actions 打包并上传两个文件。编辑器根据发布清单选择兼容版本。
+维护者运行 `python release.py v0.2.1` 生成插件和发布清单；推送与插件版本一致的标签后，由 GitHub Actions 打包并上传两个文件。编辑器根据发布清单选择兼容版本。
 
 ## 许可证
 
