@@ -49,6 +49,10 @@ jobs:
           activate-environment: infernux
           python-version: '3.13'
           auto-activate-base: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - uses: android-actions/setup-android@v3
       - name: Install release-engineering dependencies
         run: |
