@@ -81,8 +81,10 @@ public final class InfernuxActivity extends SDLActivity {
         applyImmersiveGameMode();
         installWindowInsetsBridge();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // The Player owns IME dismissal and gameplay Back as one policy.
+            // Run before the IME callback, which can outlive its hidden window.
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    OnBackInvokedDispatcher.PRIORITY_OVERLAY,
                     this::dispatchInfernuxBack);
         }
     }
