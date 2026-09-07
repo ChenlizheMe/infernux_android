@@ -1,86 +1,36 @@
 # Infernux Android 平台插件
 
-[English](README.md) · [发布制品](https://github.com/ChenlizheMe/infernux_android/releases) · [Infernux](https://github.com/ChenlizheMe/Infernux)
+这是 [Infernux](https://github.com/ChenlizheMe/Infernux) 游戏引擎的官方 Android 构建插件。它为编辑器提供 APK/AAB 导出能力，支持 ARM64 真机和 x64 模拟器，并包含运行游戏所需的预编译 Vulkan Player 与 Android 宿主文件。
 
-![Android 构建流程](package/plugin_pages/media/overview.png)
+[English](README.md) · [Infernux 引擎](https://github.com/ChenlizheMe/Infernux) · [插件模板](https://github.com/ChenlizheMe/infernux_plugin_template) · [发布制品](https://github.com/ChenlizheMe/infernux_android/releases)
 
-为 ARM64 设备和 x64 模拟器构建 Android Player。插件拥有目标注册、预编译原生 Player、SDL 宿主文件和 APK/AAB 导出。大型可复用依赖归 Hub 的安卓兼容套件管理，不放进每个项目。
+![Infernux Android 导出流程](package/plugin_pages/media/overview.png)
 
-## 基本信息
+## 插件提供什么
 
-| 项目 | 内容 |
-| --- | --- |
-| 包标识 | `infernux/platform-android` |
-| 插件版本 | 0.2.2 |
-| 引擎兼容范围 | ==0.4.0 |
-| 构建目标 | `android-arm64 / android-x64-emulator` |
-| 构建宿主 | Windows or Linux |
+- 面向真机的 `android-arm64` 与面向模拟器的 `android-x64-emulator`
+- 预编译原生 Player、CPython 3.13 运行时和 SDL Java 宿主源码
+- Vulkan 渲染、Gradle 工程生成、开发 APK 与发布 AAB
+- 最低 Android API 26
 
-## 安装
+| 包标识 | 版本 | 适配引擎 | 构建环境 | 目标平台 |
+| --- | --- | --- | --- | --- |
+| `infernux/platform-android` | 0.2.2 | Infernux 0.4.0 | Windows/Linux x64 | Android ARM64/x64 |
 
-1. 在 Infernux 0.4.0 中打开项目，进入插件面板。
-2. 在官方列表选择 Infernux Android Platform，导入并启用。 须先在 Hub 安装安卓兼容，否则导入按钮保持禁用。
-3. 打开构建设置，选择目标，按诊断补齐依赖后导出。
+## 安装与导出
 
-如果编辑器仍使用旧版内置目录，可以手动添加 GitHub 源 `https://github.com/ChenlizheMe/infernux_android`，或从 [Releases](https://github.com/ChenlizheMe/infernux_android/releases/latest) 下载 `infernux.platform-android.inxpkg` 后导入。GitHub 自动生成的源码 ZIP 是作者仓库，不是插件安装制品。
+先在 **Infernux Hub → 安装** 中安装**安卓支持**。这套 Hub 级组件包含 JDK、Gradle、Android SDK/NDK 和 Android CPython 等体积较大的公共依赖，由 Infernux 分发服务下载，并在所有项目之间复用。
 
-## 环境要求
+安卓支持准备完成后，在编辑器的**插件**窗口选择 **Infernux Android Platform** 并导入。在此之前，导入按钮会保持不可用。插件本身优先从 Infernux 分发服务下载；该渠道出现网络故障时，编辑器会改用 GitHub Releases。
 
-安装 Infernux 0.4.0、Hub 安卓兼容及完整 Android 平台插件。插件包含 ARM64/x86_64 预编译 Player 库和 SDL Java 宿主文件。普通 APK/AAB 导出不需要引擎源码、Git 子模块、CMake 或宿主 pybind11。
+真机请选择 `android-arm64`，x64 模拟器请选择 `android-x64-emulator`。开发构建默认生成 APK，发布构建默认生成 AAB。需要签名时，配置 `INFERNUX_ANDROID_KEYSTORE`、`INFERNUX_ANDROID_KEY_ALIAS` 和对应密码变量。
 
-## 共享依赖
+普通用户不需要运行 CMake，导入或导出过程中也不会临时下载 SDK。Player 使用 Vulkan，不提供 OpenGL ES 渲染路径。
 
-先在 **Hub → 安装** 中安装**安卓兼容**。共享套件就绪前，编辑器的导入按钮保持禁用；不会等到导入或构建时才下载 SDK。套件从 Hub 发布渠道独立分发，不包含在此插件的 Release 中；发布插件不代表同步发布了套件。
+## 仓库说明
 
-当前套件包括 JDK 17、Gradle 8.12、Android API 36、build-tools 36.0.0、NDK 29.0.14206865，以及两个 ABI 的 Android CPython 3.13 运行时。模拟器和 AVD 不属于真机构建所需内容。
-
-## 构建与安装
-
-真机选择 android-arm64，x64 模拟器选择 android-x64-emulator。开发构建默认输出 APK，发布构建默认输出 AAB。Player 要求 Vulkan，不提供 OpenGL ES 兜底；应用最低 API 为 26。
-
-开发 APK 可使用 `adb install -r path/to/game.apk` 安装。更新已安装游戏必须使用兼容的签名密钥；不要为绕过签名不一致直接卸载用户游戏。
-
-## 签名与存储
-
-未配置签名时，发布 AAB 保持未签名状态。设置 INFERNUX_ANDROID_KEYSTORE、INFERNUX_ANDROID_KEY_ALIAS、INFERNUX_ANDROID_KEYSTORE_PASSWORD，以及可选的 INFERNUX_ANDROID_KEY_PASSWORD（默认等于 keystore 密码）。不要提交密钥和密码。
-
-Gradle 缓存归 Hub 的 Shared/Cache/Gradle 管理，独立源码启动则使用项目 Cache/Gradle。调试签名状态使用 Shared/State/Android 或项目 State/Android。清缓存不能删除签名密钥；显式设置的 GRADLE_USER_HOME 和 ANDROID_USER_HOME 优先。
-
-## 排错
-
-导入按钮禁用表示 Hub 安卓兼容尚未安装或不完整。先处理 SDK、CPython、Gradle 或插件载荷缺失诊断，确认插件制品匹配引擎 0.4.0。如果 Hub 渠道尚未发布兼容套件，仅安装此插件无法替代它。
-
-## 开发与打包
-
-CMake 将原生调试信息分离到构建目录下的
-`symbols/<configuration>/<abi>/`。
-插件保留运行时动态符号；原始编译产物及独立 `.debug` 文件供维护者排查崩溃。
-
-引擎的 Android CMake 配置已提供发布工程目标 `prebuild_android_player`。
-它让原生启动器与引擎共用同一份 SDL，将对应 ABI 的库直接生成到
-`package/editor/infernux_android/player/<abi>/jniLibs/`，SDL Java 源码放在
-`player/java/`。屏幕方向由游戏清单传入，不再写死在原生编译常量中。
-两个 ABI 的 Release 载荷都构建完成后，CMake 的 `package_android_plugin`
-目标生成最终 `.inxpkg` 和发布清单。外层 `native/build.py` 仅供维护者交叉编译，
-用户安装插件或导出游戏不会运行它。
-
-只有 `package/` 内的内容进入 InxPackage。外层 README、SVG 配图源文件、发布流程和构建脚本属于仓库，不进入插件。引擎内文档独立位于 `package/plugin_pages/`。
-
-```text
-package/
-  inx_package.json
-  editor/infernux_android/
-  plugin_pages/
-package.py
-release.py
-README.md
-README.zh-CN.md
-```
-
-运行 `python package.py dist/infernux.platform-android.inxpkg` 本地打包。脚本仅使用 Python 标准库，不需要导入或安装 Infernux。在外层进行构建，最后将需要交付的文件放进 package/ 即可。
-
-维护者运行 `python release.py v0.2.2` 生成插件和发布清单；推送与插件版本一致的标签后，由 GitHub Actions 打包并上传两个文件。编辑器根据发布清单选择兼容版本。
+可安装的平台插件位于 `package/`；体积更大的安卓支持由 Hub 单独管理，不会在每个插件和项目里重复一份。原生源码、发布脚本、测试与 CI 留在包外。维护者构建会把两个 ABI 的载荷直接写入 `package/`，推送与版本一致的 `v<version>` 标签后，GitHub Actions 自动发布 `.inxpkg` 和 manifest。
 
 ## 许可证
 
-[MIT](LICENSE)。第三方 SDK 和引擎运行时各自遵守原有许可证，不因本插件而改变。
+[MIT](LICENSE)。随包提供的第三方组件和 Android 工具链继续遵守各自的许可证。
