@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -52,7 +53,7 @@ _ANDROID_CAPABILITIES = PlatformCapabilities(
     text_input=True,
     gamepad_input=True,
     python_native_modules=True,
-    numba=False,
+    cpu_jit=False,
     persistent_storage=True,
     features=frozenset(
         {
@@ -66,15 +67,140 @@ _ANDROID_CAPABILITIES = PlatformCapabilities(
 
 _ANDROID_PYTHON_SERIES = "3.13"
 _ANDROID_MINIMUM_API = 26
-# Bump when the packaged runtime layout or Android asset extraction contract changes.
-# The value is part of the on-device cache identity, so APK upgrades cannot silently
-# retain a runtime written by an older packaging policy.
-_ANDROID_PYTHON_RUNTIME_LAYOUT = 3
-_NUMPY_RUNTIME_EXCLUDED_PREFIXES = ("numpy/random/_examples/",)
+_ANDROID_STDLIB_IGNORES = (
+    "__pycache__",
+    "*.pyc",
+    "_test*.so",
+    "_xxtestfuzz*.so",
+    "xxlimited*.so",
+    "test",
+    "idlelib",
+    "tkinter",
+    "turtledemo",
+    "_pyrepl",
+    "pydoc_data",
+    "ensurepip",
+    f"config-{_ANDROID_PYTHON_SERIES}-*",
+)
+_NUMPY_RUNTIME_EXCLUDED_PREFIXES = (
+    "numpy/random/_examples/",
+    "numpy/_core/tests/",
+    "numpy/fft/tests/",
+    "numpy/lib/tests/",
+    "numpy/linalg/tests/",
+    "numpy/ma/tests/",
+    "numpy/polynomial/tests/",
+    "numpy/random/tests/",
+    "numpy/testing/",
+    "numpy/tests/",
+    "numpy/typing/tests/",
+    "numpy/f2py/",
+)
 _ANDROID_ARCHIVE_ABIS = frozenset({"arm64-v8a", "armeabi-v7a", "x86", "x86_64"})
 _ANDROID_FORBIDDEN_DISTRIBUTIONS = frozenset(
     {"llvmlite", "numba", "torch", "torchaudio", "torchvision"}
 )
+
+
+def _android_gpu_compute_uses(project_root: str | Path) -> tuple[dict[str, object], ...]:
+    """Return authored GPU-compute declarations unsupported by Android Player.
+
+    The Android runtime intentionally ships without the private GPU compiler
+    binding/lowering sources.  Failing the build here keeps an APK from
+    publishing a script that can only fail later, on the device, with a
+    ``ComputeCompilerError``.  This is a structural check over authored Python
+    scripts rather than a runtime fallback: CPU/JIT scripts remain allowed.
+    """
+
+    scripts_root = Path(project_root).expanduser() / "Assets"
+    if not scripts_root.is_dir():
+        return ()
+    uses: list[dict[str, object]] = []
+    for source_path in sorted(
+        scripts_root.rglob("*.py"),
+        key=lambda p: p.as_posix().casefold(),
+    ):
+        try:
+            source = source_path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(source_path))
+        except (OSError, UnicodeError, SyntaxError):
+            # Script compilation has its own diagnostic.  This gate only
+            # rejects a known GPU declaration and must not hide that error.
+            continue
+
+        infernux_aliases: set[str] = {"Infernux"}
+        compute_aliases: set[str] = {"compute"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for item in node.names:
+                    if item.name == "Infernux":
+                        infernux_aliases.add(item.asname or "Infernux")
+                    elif item.name == "Infernux.compute":
+                        compute_aliases.add(item.asname or "compute")
+            elif isinstance(node, ast.ImportFrom) and node.module == "Infernux":
+                for item in node.names:
+                    if item.name == "compute":
+                        compute_aliases.add(item.asname or "compute")
+
+        def is_compute_object(value: ast.AST) -> bool:
+            if isinstance(value, ast.Name):
+                return value.id in compute_aliases
+            return (
+                isinstance(value, ast.Attribute)
+                and value.attr == "compute"
+                and isinstance(value.value, ast.Name)
+                and value.value.id in infernux_aliases
+            )
+
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for decorator in node.decorator_list:
+                if isinstance(decorator, ast.Call):
+                    decorator = decorator.func
+                if (
+                    not isinstance(decorator, ast.Attribute)
+                    or decorator.attr not in {"kernel", "function"}
+                    or not is_compute_object(decorator.value)
+                ):
+                    continue
+                uses.append(
+                    {
+                        "path": source_path.relative_to(Path(project_root)).as_posix(),
+                        "line": int(getattr(decorator, "lineno", 0) or 0),
+                        "member": str(decorator.attr),
+                    }
+                )
+                if len(uses) >= 64:
+                    return tuple(uses)
+    return tuple(uses)
+
+
+def _android_gpu_compute_diagnostic(
+    project_root: str | Path,
+) -> BuildDiagnostic | None:
+    uses = _android_gpu_compute_uses(project_root)
+    if not uses:
+        return None
+    first = uses[0]
+    return BuildDiagnostic(
+        DiagnosticSeverity.ERROR,
+        "android.compute.unsupported",
+        (
+            "Android Player cannot build projects declaring inx.compute GPU "
+            "kernels: this target does not ship the private GPU compiler "
+            "binding/lowering sources. Precompile GPU kernels for Android or "
+            "remove the GPU compute declarations before building."
+        ),
+        source="infernux/platform-android",
+        detail={
+            "uses": uses,
+            "first_path": first["path"],
+            "first_line": first["line"],
+        },
+    )
+
+
 class AndroidPlatformExporter(PlatformExporter):
     @property
     def exporter_id(self) -> str:
@@ -149,6 +275,9 @@ class AndroidPlatformExporter(PlatformExporter):
                 ),
                 details,
             )
+        compute_diagnostic = _android_gpu_compute_diagnostic(request.project_root)
+        if compute_diagnostic is not None:
+            return CapabilityReport(False, (compute_diagnostic,), details)
         try:
             payload = Path(__file__).with_name("player")
             native = inspect_native_payload(payload, abi=abi)
@@ -666,6 +795,7 @@ def _configure_project(
     target_dpi: int = 320,
     game_name: str = "Infernux Player",
 ) -> None:
+    application_id = _android_application_id(game_name)
     replacements = {
         "@ANDROID_ABI@": abi,
         "@ANDROID_BUILD_TOOLS_VERSION@": ANDROID_BUILD_TOOLS,
@@ -677,6 +807,7 @@ def _configure_project(
         "@ANDROID_RESOLUTION_SCALING@": resolution_scaling,
         "@ANDROID_TARGET_DPI@": str(target_dpi),
         "@ANDROID_APP_NAME@": xml_escape(game_name, {'"': "&quot;", "'": "&apos;"}),
+        "@ANDROID_APPLICATION_ID@": application_id,
     }
     for path in project_root.rglob("*.in"):
         payload = path.read_text(encoding="utf-8")
@@ -691,6 +822,16 @@ def _configure_project(
         encoding="utf-8",
         newline="\n",
     )
+
+
+def _android_application_id(game_name: str) -> str:
+    """Return the stable Android identity derived from the authored game name."""
+    product = "".join(character.lower() for character in str(game_name) if character.isascii() and character.isalnum())
+    if not product:
+        raise ValueError("Android game_name must contain at least one ASCII letter or digit")
+    if product[0].isdigit():
+        product = "game" + product
+    return f"com.infernux.{product}"
 
 
 def _engine_package() -> Path:
@@ -793,6 +934,8 @@ def _cook_player_content(
     )
 
     settings = build_settings_for_request(request)
+    game_name = str(settings["game_name"]).strip() or Path(request.project_root).name
+    application_id = _android_application_id(game_name)
     sdl_orientations, android_orientation = _android_orientation_contract(
         request,
         settings,
@@ -806,7 +949,7 @@ def _cook_player_content(
             cook_root,
             platform_host={
                 "identity": "android-sdl-python-player-host",
-                "entry_point": "com.infernux.bootstrap/.InfernuxActivity",
+                "entry_point": f"{application_id}/com.infernux.bootstrap.InfernuxActivity",
                 "platform": "android",
                 "architecture": abi,
             },
@@ -1045,16 +1188,7 @@ def _stage_python_runtime(
     shutil.copytree(
         library_root,
         staged_library,
-        ignore=shutil.ignore_patterns(
-            "__pycache__",
-            "*.pyc",
-            "test",
-            "idlelib",
-            "tkinter",
-            "turtledemo",
-            "ensurepip",
-            f"config-{version}-*",
-        ),
+        ignore=shutil.ignore_patterns(*_ANDROID_STDLIB_IGNORES),
     )
     request.report("python-runtime", 2, 4, f"Staging Android Python {version} native libraries")
     native_library.mkdir(parents=True, exist_ok=True)
@@ -1234,9 +1368,10 @@ def _python_runtime_identity(
 
     digest = hashlib.sha256(
         (
-            f"layout={_ANDROID_PYTHON_RUNTIME_LAYOUT}\n"
             f"python={version}\n"
             f"abi={abi}\n"
+            "stdlib-ignore=" + "\0".join(_ANDROID_STDLIB_IGNORES) + "\n"
+            "numpy-exclude=" + "\0".join(_NUMPY_RUNTIME_EXCLUDED_PREFIXES) + "\n"
         ).encode("utf-8")
     )
     paths = [path for path in library_root.rglob("*") if path.is_file()]
