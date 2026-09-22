@@ -2,6 +2,7 @@ package com.infernux.bootstrap;
 
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.Context;
 import android.graphics.Insets;
 import android.os.Bundle;
 import android.os.Build;
@@ -9,6 +10,7 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsAnimation;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLSurface;
 
 public final class InfernuxActivity extends SDLActivity {
     private static final String LOG_TAG = "InfernuxActivity";
@@ -36,6 +39,31 @@ public final class InfernuxActivity extends SDLActivity {
     private static final String PLAYER_CONTENT_ID = "infernux-content.id";
     private static final String PLAYER_DATA_ROOT = "infernux-data-root.txt";
     private int lastPublishedKeyboardInset = Integer.MIN_VALUE;
+
+    private static native void nativeWaitForPresentationSuspended();
+
+    @Override
+    protected SDLSurface createSDLSurface(Context context) {
+        return new InfernuxSurface(context);
+    }
+
+    private static final class InfernuxSurface extends SDLSurface {
+        InfernuxSurface(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            // Queue SDL's pause before waiting: its SDL-thread application
+            // event owns the Vulkan drain and destruction of the complete old
+            // presentation generation. The ANativeWindow remains alive until
+            // that work has published its completion signal.
+            SDLActivity.mNextNativeState = SDLActivity.NativeState.PAUSED;
+            SDLActivity.handleNativeState();
+            nativeWaitForPresentationSuspended();
+            super.surfaceDestroyed(holder);
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -232,7 +260,7 @@ public final class InfernuxActivity extends SDLActivity {
     }
 
     private void dispatchInfernuxBack() {
-        if (mScreenKeyboardShown) {
+        if (isKeyboardVisible()) {
             sendCommand(COMMAND_TEXTEDIT_HIDE, null);
             onNativeKeyboardFocusLost();
             return;
@@ -243,6 +271,15 @@ public final class InfernuxActivity extends SDLActivity {
         // portable Cancel action to close a modal, pause, or ask for exit.
         onNativeKeyDown(KeyEvent.KEYCODE_BACK);
         onNativeKeyUp(KeyEvent.KEYCODE_BACK);
+    }
+
+    private boolean isKeyboardVisible() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsets windowInsets = getWindow().getDecorView().getRootWindowInsets();
+            return windowInsets != null
+                    && windowInsets.isVisible(WindowInsets.Type.ime());
+        }
+        return lastPublishedKeyboardInset > 0;
     }
 
     private File prepareVersionedAssets(String assetRoot, String identityName)

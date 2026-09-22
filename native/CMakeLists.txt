@@ -10,7 +10,17 @@ add_library(InfernuxAndroidHost SHARED
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 set_target_properties(InfernuxAndroidHost PROPERTIES OUTPUT_NAME main)
 target_compile_features(InfernuxAndroidHost PRIVATE cxx_std_17)
-target_link_libraries(InfernuxAndroidHost PRIVATE SDL3::SDL3 InfernuxTargetPython log)
+# main.cpp bridges the Android lifecycle into the engine's presentation
+# synchronisation primitive.  Keep the engine include root explicit here:
+# InfernuxAndroidHost is a small plugin-side target and does not inherit the
+# private include directories used by the core targets it links against.
+target_include_directories(InfernuxAndroidHost PRIVATE
+    "${CMAKE_SOURCE_DIR}/cpp/infernux")
+target_link_libraries(InfernuxAndroidHost PRIVATE
+    SDL3::SDL3
+    InfernuxFoundation
+    InfernuxTargetPython
+    log)
 
 set(_android_player_targets
     InfernuxAndroidHost _Infernux _InfernuxBootstrap

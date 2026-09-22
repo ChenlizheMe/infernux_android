@@ -20,7 +20,7 @@ android {
     ndkVersion "@ANDROID_NDK_VERSION@"
 
     defaultConfig {
-        applicationId "com.infernux.bootstrap"
+        applicationId "@ANDROID_APPLICATION_ID@"
         minSdk 26
         targetSdk 36
         versionCode 1

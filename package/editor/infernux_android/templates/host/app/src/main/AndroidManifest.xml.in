@@ -31,7 +31,7 @@
             android:name="infernux.target_dpi"
             android:value="@ANDROID_TARGET_DPI@" />
         <activity
-            android:name=".InfernuxActivity"
+            android:name="com.infernux.bootstrap.InfernuxActivity"
             android:alwaysRetainTaskState="true"
             android:configChanges="layoutDirection|locale|fontScale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="true"

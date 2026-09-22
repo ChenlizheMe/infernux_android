@@ -2,6 +2,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <core/platform/AndroidPresentationLifecycle.h>
+
+#include <jni.h>
+
 #include <string>
 
 namespace
@@ -106,6 +110,14 @@ bool run_player()
     return false;
 }
 } // namespace
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_infernux_bootstrap_InfernuxActivity_nativeWaitForPresentationSuspended(JNIEnv *, jclass)
+{
+    SDL_Log("INFERNUX_ANDROID_SURFACE_DESTROY_WAIT_BEGIN");
+    infernux::AndroidPresentationLifecycle::WaitForPresentationSuspended();
+    SDL_Log("INFERNUX_ANDROID_SURFACE_DESTROY_WAIT_COMPLETE");
+}
 
 int main(int argc, char **argv)
 {

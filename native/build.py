@@ -40,6 +40,7 @@ def main() -> None:
         f"-DINFERNUX_TARGET_PYTHON_LIBRARY={prefix / 'lib' / ('libpython' + ANDROID_PYTHON_SERIES + '.so')}",
         f"-DINFERNUX_PYTHON_SYNC_DIR={build / 'python-sync'}",
         "-DINFERNUX_BUILD_PLAYER_HOST=OFF", "-DINFERNUX_BUILD_TESTS=OFF",
+        "-DINFERNUX_BUILD_GPU_JIT_COMPILER=OFF",
         "-DINFERNUX_RELEASE_LTO=OFF", "-DINFERNUX_ENABLE_VULKAN_VALIDATION=OFF",
     ], cwd=ENGINE_ROOT, check=True)
     subprocess.run([cmake, "--build", str(build), "--target", "prebuild_android_player",
