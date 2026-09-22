@@ -102,8 +102,11 @@ _ANDROID_FORBIDDEN_DISTRIBUTIONS = frozenset(
 )
 
 
-def _android_gpu_compute_uses(project_root: str | Path) -> tuple[dict[str, object], ...]:
-    """Return authored GPU-compute declarations unsupported by Android Player.
+def _android_gpu_compute_uses(
+    source_paths: tuple[str | Path, ...],
+    project_root: str | Path,
+) -> tuple[dict[str, object], ...]:
+    """Return cooked-closure GPU declarations unsupported by Android Player.
 
     The Android runtime intentionally ships without the private GPU compiler
     binding/lowering sources.  Failing the build here keeps an APK from
@@ -112,14 +115,14 @@ def _android_gpu_compute_uses(project_root: str | Path) -> tuple[dict[str, objec
     scripts rather than a runtime fallback: CPU/JIT scripts remain allowed.
     """
 
-    scripts_root = Path(project_root).expanduser() / "Assets"
-    if not scripts_root.is_dir():
-        return ()
+    project_root = Path(project_root).expanduser()
     uses: list[dict[str, object]] = []
     for source_path in sorted(
-        scripts_root.rglob("*.py"),
+        (Path(path) for path in source_paths),
         key=lambda p: p.as_posix().casefold(),
     ):
+        if not source_path.is_file() or source_path.suffix.casefold() != ".py":
+            continue
         try:
             source = source_path.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(source_path))
@@ -166,7 +169,7 @@ def _android_gpu_compute_uses(project_root: str | Path) -> tuple[dict[str, objec
                     continue
                 uses.append(
                     {
-                        "path": source_path.relative_to(Path(project_root)).as_posix(),
+                        "path": _android_source_display_path(source_path, project_root),
                         "line": int(getattr(decorator, "lineno", 0) or 0),
                         "member": str(decorator.attr),
                     }
@@ -176,27 +179,40 @@ def _android_gpu_compute_uses(project_root: str | Path) -> tuple[dict[str, objec
     return tuple(uses)
 
 
+def _android_source_display_path(source_path: Path, project_root: Path) -> str:
+    try:
+        return source_path.relative_to(project_root).as_posix()
+    except ValueError:
+        return source_path.as_posix()
+
+
+class _AndroidUnsupportedGpuComputeError(RuntimeError):
+    def __init__(self, uses: tuple[dict[str, object], ...]) -> None:
+        first = uses[0]
+        self.uses = uses
+        self.first_path = first["path"]
+        self.first_line = first["line"]
+        super().__init__(
+            "Android Player cannot cook the selected project Python closure "
+            "because it declares inx.compute GPU kernels/functions; this "
+            "target does not ship the private GPU compiler "
+            "binding/lowering sources. Precompile GPU kernels for Android or "
+            "remove the declarations from the selected scene closure."
+        )
+
+
 def _android_gpu_compute_diagnostic(
-    project_root: str | Path,
-) -> BuildDiagnostic | None:
-    uses = _android_gpu_compute_uses(project_root)
-    if not uses:
-        return None
-    first = uses[0]
+    error: _AndroidUnsupportedGpuComputeError,
+) -> BuildDiagnostic:
     return BuildDiagnostic(
         DiagnosticSeverity.ERROR,
         "android.compute.unsupported",
-        (
-            "Android Player cannot build projects declaring inx.compute GPU "
-            "kernels: this target does not ship the private GPU compiler "
-            "binding/lowering sources. Precompile GPU kernels for Android or "
-            "remove the GPU compute declarations before building."
-        ),
+        str(error),
         source="infernux/platform-android",
         detail={
-            "uses": uses,
-            "first_path": first["path"],
-            "first_line": first["line"],
+            "uses": error.uses,
+            "first_path": error.first_path,
+            "first_line": error.first_line,
         },
     )
 
@@ -275,9 +291,6 @@ class AndroidPlatformExporter(PlatformExporter):
                 ),
                 details,
             )
-        compute_diagnostic = _android_gpu_compute_diagnostic(request.project_root)
-        if compute_diagnostic is not None:
-            return CapabilityReport(False, (compute_diagnostic,), details)
         try:
             payload = Path(__file__).with_name("player")
             native = inspect_native_payload(payload, abi=abi)
@@ -431,6 +444,14 @@ class AndroidPlatformExporter(PlatformExporter):
             )
             resolution_scaling, target_dpi = _android_resolution_contract(request)
         except (OSError, RuntimeError, ValueError) as error:
+            if isinstance(error, _AndroidUnsupportedGpuComputeError):
+                return BuildResult(
+                    request.target,
+                    False,
+                    diagnostics=(_android_gpu_compute_diagnostic(error),),
+                    manifest={"abi": abi, "staging": str(staging)},
+                    elapsed_seconds=time.perf_counter() - started,
+                )
             return BuildResult(
                 request.target,
                 False,
@@ -954,6 +975,12 @@ def _cook_player_content(
                 "architecture": abi,
             },
         )
+        gpu_uses = _android_gpu_compute_uses(
+            cooked.python_sources,
+            request.project_root,
+        )
+        if gpu_uses:
+            raise _AndroidUnsupportedGpuComputeError(gpu_uses)
         cooked_data = cooked.data_directory
         player_assets = staging / "app" / "src" / "main" / "assets" / "player"
         shutil.rmtree(player_assets, ignore_errors=True)
