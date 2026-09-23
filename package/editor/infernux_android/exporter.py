@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import hashlib
 import importlib.util
 import json
@@ -59,6 +58,7 @@ _ANDROID_CAPABILITIES = PlatformCapabilities(
         {
             "android-lifecycle",
             "density-aware-viewport",
+            "gpu-compute-aot",
             "multi-touch",
             "software-keyboard",
         }
@@ -100,121 +100,6 @@ _ANDROID_ARCHIVE_ABIS = frozenset({"arm64-v8a", "armeabi-v7a", "x86", "x86_64"})
 _ANDROID_FORBIDDEN_DISTRIBUTIONS = frozenset(
     {"llvmlite", "numba", "torch", "torchaudio", "torchvision"}
 )
-
-
-def _android_gpu_compute_uses(
-    source_paths: tuple[str | Path, ...],
-    project_root: str | Path,
-) -> tuple[dict[str, object], ...]:
-    """Return cooked-closure GPU declarations unsupported by Android Player.
-
-    The Android runtime intentionally ships without the private GPU compiler
-    binding/lowering sources.  Failing the build here keeps an APK from
-    publishing a script that can only fail later, on the device, with a
-    ``ComputeCompilerError``.  This is a structural check over authored Python
-    scripts rather than a runtime fallback: CPU/JIT scripts remain allowed.
-    """
-
-    project_root = Path(project_root).expanduser()
-    uses: list[dict[str, object]] = []
-    for source_path in sorted(
-        (Path(path) for path in source_paths),
-        key=lambda p: p.as_posix().casefold(),
-    ):
-        if not source_path.is_file() or source_path.suffix.casefold() != ".py":
-            continue
-        try:
-            source = source_path.read_text(encoding="utf-8")
-            tree = ast.parse(source, filename=str(source_path))
-        except (OSError, UnicodeError, SyntaxError):
-            # Script compilation has its own diagnostic.  This gate only
-            # rejects a known GPU declaration and must not hide that error.
-            continue
-
-        infernux_aliases: set[str] = {"Infernux"}
-        compute_aliases: set[str] = {"compute"}
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for item in node.names:
-                    if item.name == "Infernux":
-                        infernux_aliases.add(item.asname or "Infernux")
-                    elif item.name == "Infernux.compute":
-                        compute_aliases.add(item.asname or "compute")
-            elif isinstance(node, ast.ImportFrom) and node.module == "Infernux":
-                for item in node.names:
-                    if item.name == "compute":
-                        compute_aliases.add(item.asname or "compute")
-
-        def is_compute_object(value: ast.AST) -> bool:
-            if isinstance(value, ast.Name):
-                return value.id in compute_aliases
-            return (
-                isinstance(value, ast.Attribute)
-                and value.attr == "compute"
-                and isinstance(value.value, ast.Name)
-                and value.value.id in infernux_aliases
-            )
-
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            for decorator in node.decorator_list:
-                if isinstance(decorator, ast.Call):
-                    decorator = decorator.func
-                if (
-                    not isinstance(decorator, ast.Attribute)
-                    or decorator.attr not in {"kernel", "function"}
-                    or not is_compute_object(decorator.value)
-                ):
-                    continue
-                uses.append(
-                    {
-                        "path": _android_source_display_path(source_path, project_root),
-                        "line": int(getattr(decorator, "lineno", 0) or 0),
-                        "member": str(decorator.attr),
-                    }
-                )
-                if len(uses) >= 64:
-                    return tuple(uses)
-    return tuple(uses)
-
-
-def _android_source_display_path(source_path: Path, project_root: Path) -> str:
-    try:
-        return source_path.relative_to(project_root).as_posix()
-    except ValueError:
-        return source_path.as_posix()
-
-
-class _AndroidUnsupportedGpuComputeError(RuntimeError):
-    def __init__(self, uses: tuple[dict[str, object], ...]) -> None:
-        first = uses[0]
-        self.uses = uses
-        self.first_path = first["path"]
-        self.first_line = first["line"]
-        super().__init__(
-            "Android Player cannot cook the selected project Python closure "
-            "because it declares inx.compute GPU kernels/functions; this "
-            "target does not ship the private GPU compiler "
-            "binding/lowering sources. Precompile GPU kernels for Android or "
-            "remove the declarations from the selected scene closure."
-        )
-
-
-def _android_gpu_compute_diagnostic(
-    error: _AndroidUnsupportedGpuComputeError,
-) -> BuildDiagnostic:
-    return BuildDiagnostic(
-        DiagnosticSeverity.ERROR,
-        "android.compute.unsupported",
-        str(error),
-        source="infernux/platform-android",
-        detail={
-            "uses": error.uses,
-            "first_path": error.first_path,
-            "first_line": error.first_line,
-        },
-    )
 
 
 class AndroidPlatformExporter(PlatformExporter):
@@ -444,11 +329,19 @@ class AndroidPlatformExporter(PlatformExporter):
             )
             resolution_scaling, target_dpi = _android_resolution_contract(request)
         except (OSError, RuntimeError, ValueError) as error:
-            if isinstance(error, _AndroidUnsupportedGpuComputeError):
+            from Infernux.engine.build.compute_aot import ComputeAotBuildError
+
+            if isinstance(error, ComputeAotBuildError):
                 return BuildResult(
                     request.target,
                     False,
-                    diagnostics=(_android_gpu_compute_diagnostic(error),),
+                    diagnostics=(BuildDiagnostic(
+                        DiagnosticSeverity.ERROR,
+                        "android.compute.aot-incomplete",
+                        str(error),
+                        source=self.exporter_id,
+                        detail={"missing": error.missing},
+                    ),),
                     manifest={"abi": abi, "staging": str(staging)},
                     elapsed_seconds=time.perf_counter() - started,
                 )
@@ -895,6 +788,10 @@ def _stage_engine_python_package(
             "test",
         ),
     )
+    shutil.rmtree(
+        destination / "_compiler" / "taichi" / "_vendor",
+        ignore_errors=True,
+    )
     public_api = source_package.parent / "infernux.py"
     if not public_api.is_file():
         raise ValueError(f"Infernux public Python API is missing: {public_api}")
@@ -974,13 +871,8 @@ def _cook_player_content(
                 "platform": "android",
                 "architecture": abi,
             },
+            gpu_compute_aot=True,
         )
-        gpu_uses = _android_gpu_compute_uses(
-            cooked.python_sources,
-            request.project_root,
-        )
-        if gpu_uses:
-            raise _AndroidUnsupportedGpuComputeError(gpu_uses)
         cooked_data = cooked.data_directory
         player_assets = staging / "app" / "src" / "main" / "assets" / "player"
         shutil.rmtree(player_assets, ignore_errors=True)
