@@ -266,11 +266,10 @@ public final class InfernuxActivity extends SDLActivity {
             return;
         }
 
-        // Back is gameplay/UI input, not an unconditional Activity exit.
-        // SDL maps Android KEYCODE_BACK to SDL_SCANCODE_AC_BACK, allowing the
-        // portable Cancel action to close a modal, pause, or ask for exit.
-        onNativeKeyDown(KeyEvent.KEYCODE_BACK);
-        onNativeKeyUp(KeyEvent.KEYCODE_BACK);
+        // Match Unity's default: Back is Escape input for gameplay/UI, not an
+        // unconditional Activity exit. The game decides whether to leave.
+        onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
+        onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
     }
 
     private boolean isKeyboardVisible() {
