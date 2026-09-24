@@ -29,8 +29,10 @@ if(INFERNUX_VULKAN_LOADER_TARGET)
     list(APPEND _android_player_targets ${INFERNUX_VULKAN_LOADER_TARGET})
 endif()
 set(_android_player_files)
+set(_android_player_manifest_entries)
 foreach(_target IN LISTS _android_player_targets)
     list(APPEND _android_player_files "$<TARGET_FILE:${_target}>")
+    list(APPEND _android_player_manifest_entries "\"$<TARGET_FILE_NAME:${_target}>\"")
 endforeach()
 
 # libc++ is needed only when the selected NDK build uses the shared STL.
@@ -44,10 +46,13 @@ if(CMAKE_ANDROID_STL_TYPE STREQUAL "c++_shared")
         message(FATAL_ERROR "The selected Android NDK has no shared C++ runtime")
     endif()
     list(APPEND _android_player_files "${_android_cxx_runtime}")
+    get_filename_component(_android_cxx_runtime_name "${_android_cxx_runtime}" NAME)
+    list(APPEND _android_player_manifest_entries "\"${_android_cxx_runtime_name}\"")
 endif()
 
+list(JOIN _android_player_manifest_entries ", " _android_player_manifest_libraries)
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/android-player-$<CONFIG>.json"
-    CONTENT "{\n  \"engine_version\": \"${INFERNUX_PACKAGE_VERSION}\",\n  \"platform\": \"android\",\n  \"abi\": \"${ANDROID_ABI}\",\n  \"python_abi\": \"cp313\",\n  \"minimum_api\": 26,\n  \"configuration\": \"$<CONFIG>\"\n}\n")
+    CONTENT "{\n  \"engine_version\": \"${INFERNUX_PACKAGE_VERSION}\",\n  \"platform\": \"android\",\n  \"abi\": \"${ANDROID_ABI}\",\n  \"python_abi\": \"cp313\",\n  \"minimum_api\": 26,\n  \"configuration\": \"$<CONFIG>\",\n  \"native_libraries\": [${_android_player_manifest_libraries}]\n}\n")
 add_custom_target(prebuild_android_player
     COMMAND "${CMAKE_COMMAND}"
         "-DPLAYER_FILES=$<JOIN:${_android_player_files},|>"

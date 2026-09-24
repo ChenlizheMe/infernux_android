@@ -29,6 +29,7 @@ class ReleaseTests(unittest.TestCase):
             (native.parent / "Player.inxmanifest").write_text(json.dumps({
                 "engine_version": "0.4.0", "platform": "android", "abi": abi,
                 "python_abi": "cp313", "minimum_api": 26, "configuration": "Release",
+                "native_libraries": list(libraries),
             }), encoding="utf-8")
         java = self.player / "java/org/libsdl/app/SDLActivity.java"
         java.parent.mkdir(parents=True)
@@ -42,6 +43,17 @@ class ReleaseTests(unittest.TestCase):
         (self.player / "x86_64/jniLibs/libmain.so").unlink()
         with self.assertRaises(FileNotFoundError):
             release.build_release()
+        self.assertFalse((self.root / "dist").exists())
+
+    def test_release_requires_split_runtime_libraries(self):
+        for name in ("libInfernuxAudioRuntime.so", "libInfernuxAssetRuntime.so"):
+            with self.subTest(name=name):
+                missing = self.player / "arm64-v8a/jniLibs" / name
+                original = missing.read_bytes()
+                missing.unlink()
+                with self.assertRaises(FileNotFoundError):
+                    release.build_release()
+                missing.write_bytes(original)
         self.assertFalse((self.root / "dist").exists())
 
     def test_release_rejects_wrong_elf_architecture(self):

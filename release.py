@@ -20,7 +20,14 @@ def _require_native_payloads(root: Path) -> None:
                     "python_abi": "cp313", "minimum_api": 26, "configuration": "Release"}
         if not isinstance(manifest, dict) or any(manifest.get(k) != v for k, v in expected.items()):
             raise ValueError(f"Android {abi} payload must match the 0.4.0 Release contract")
-        for name in libraries:
+        declared = manifest.get("native_libraries")
+        if (not isinstance(declared, list)
+                or any(not isinstance(name, str) for name in declared)
+                or len(declared) != len(set(declared))
+                or set(declared) not in (set(libraries),
+                                        set(libraries) | {"libc++_shared.so"})):
+            raise ValueError(f"Android {abi} native library manifest is incomplete")
+        for name in declared:
             with (directory / "jniLibs" / name).open("rb") as stream:
                 header = stream.read(20)
             if header[:6] != b"\x7fELF\x02\x01" or int.from_bytes(header[18:20], "little") != machine:
