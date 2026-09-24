@@ -38,6 +38,7 @@ public final class InfernuxActivity extends SDLActivity {
     private static final String PLAYER_ASSET_ROOT = "player";
     private static final String PLAYER_CONTENT_ID = "infernux-content.id";
     private static final String PLAYER_DATA_ROOT = "infernux-data-root.txt";
+    private static final String USER_DATA_ROOT = "user-data";
     private int lastPublishedKeyboardInset = Integer.MIN_VALUE;
 
     private static native void nativeWaitForPresentationSuspended();
@@ -75,6 +76,11 @@ public final class InfernuxActivity extends SDLActivity {
                     PLAYER_ASSET_ROOT,
                     PLAYER_CONTENT_ID);
             File playerData = resolvePlayerDataRoot(playerAssets);
+            File persistentData = new File(getFilesDir(), USER_DATA_ROOT);
+            File looseFiles = new File(persistentData, "loose");
+            if (!looseFiles.isDirectory() && !looseFiles.mkdirs()) {
+                throw new IOException("Failed to create Android Player loose-file directory");
+            }
             Os.setenv("INFERNUX_PYTHON_HOME", pythonHome.getAbsolutePath(), true);
             Os.setenv(
                     "INFERNUX_NATIVE_LIBRARY_DIR",
@@ -90,7 +96,11 @@ public final class InfernuxActivity extends SDLActivity {
                     true);
             Os.setenv(
                     "_INFERNUX_PLAYER_PERSISTENT_DATA_ROOT",
-                    new File(getFilesDir(), "player").getAbsolutePath(),
+                    persistentData.getAbsolutePath(),
+                    true);
+            Os.setenv(
+                    "_INFERNUX_PLAYER_INSTALL_ROOT",
+                    looseFiles.getAbsolutePath(),
                     true);
             Os.setenv("INFERNUX_RENDER_PROFILE", "mobile", true);
             Os.setenv("INFERNUX_PRESENT_MODE", "fifo", true);
