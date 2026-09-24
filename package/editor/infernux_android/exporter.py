@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -100,6 +101,45 @@ _ANDROID_ARCHIVE_ABIS = frozenset({"arm64-v8a", "armeabi-v7a", "x86", "x86_64"})
 _ANDROID_FORBIDDEN_DISTRIBUTIONS = frozenset(
     {"llvmlite", "numba", "torch", "torchaudio", "torchvision"}
 )
+
+
+class _UnsupportedJitImportError(ValueError):
+    """A selected Player script imports a compiler absent from Android."""
+
+
+def _reject_android_jit_imports(python_sources: tuple[Path, ...]) -> None:
+    """Check the same GUID-selected source closure used by the content cook."""
+    unsupported: dict[str, set[str]] = {}
+    for source_value in python_sources:
+        source_path = Path(source_value).resolve()
+        if not source_path.is_file() or source_path.suffix.casefold() != ".py":
+            raise ValueError(
+                f"Android Player Python source closure contains an invalid file: {source_path}"
+            )
+        try:
+            tree = ast.parse(source_path.read_text(encoding="utf-8"), str(source_path))
+        except (OSError, UnicodeError, SyntaxError) as error:
+            raise ValueError(
+                f"Android dependency scan failed for {source_path}: {error}"
+            ) from error
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = (alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = (node.module.split(".", 1)[0],)
+            else:
+                continue
+            for name in names:
+                if name in {"numba", "llvmlite"}:
+                    unsupported.setdefault(name, set()).add(str(source_path))
+    if unsupported:
+        imports = ", ".join(sorted(unsupported))
+        sources = ", ".join(sorted({path for paths in unsupported.values() for path in paths}))
+        raise _UnsupportedJitImportError(
+            f"Android Player cannot package direct {imports} imports in selected "
+            f"scripts ({sources}): the Android runtime has no CPU JIT compiler. "
+            "Use Infernux.jit.compile for ordinary Python execution on Android."
+        )
 
 
 class AndroidPlatformExporter(PlatformExporter):
@@ -331,6 +371,19 @@ class AndroidPlatformExporter(PlatformExporter):
         except (OSError, RuntimeError, ValueError) as error:
             from Infernux.engine.build.compute_aot import ComputeAotBuildError
 
+            if isinstance(error, _UnsupportedJitImportError):
+                return BuildResult(
+                    request.target,
+                    False,
+                    diagnostics=(BuildDiagnostic(
+                        DiagnosticSeverity.ERROR,
+                        "android.python.jit-import-unsupported",
+                        str(error),
+                        source=self.exporter_id,
+                    ),),
+                    manifest={"abi": abi, "staging": str(staging)},
+                    elapsed_seconds=time.perf_counter() - started,
+                )
             if isinstance(error, ComputeAotBuildError):
                 return BuildResult(
                     request.target,
@@ -873,6 +926,7 @@ def _cook_player_content(
             },
             gpu_compute_aot=True,
         )
+        _reject_android_jit_imports(cooked.python_sources)
         cooked_data = cooked.data_directory
         player_assets = staging / "app" / "src" / "main" / "assets" / "player"
         shutil.rmtree(player_assets, ignore_errors=True)
