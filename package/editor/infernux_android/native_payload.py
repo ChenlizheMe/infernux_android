@@ -58,3 +58,56 @@ def stage_native_payload(root: Path, staging: Path, *, abi: str) -> None:
     if java.exists():
         shutil.rmtree(java)
     shutil.copytree(root / "java/org/libsdl", java, ignore=shutil.ignore_patterns("*.meta"))
+    _patch_sdl_input_connection(
+        java / "app/src/main/java/org/libsdl/app/SDLInputConnection.java"
+    )
+
+
+def _patch_sdl_input_connection(path: Path) -> None:
+    """Make Enter and Backspace explicit SDL key edges for Android IMEs."""
+
+    text = path.read_text(encoding="utf-8")
+    if "SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_DEL)" in text:
+        return
+    old_enter = (
+        "        if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {\n"
+        "            if (SDLActivity.onNativeSoftReturnKey()) {\n"
+        "                return true;\n"
+        "            }\n"
+        "        }\n"
+    )
+    new_enter = (
+        "        final int keyCode = event.getKeyCode();\n"
+        "        if (keyCode == KeyEvent.KEYCODE_ENTER) {\n"
+        "            if (SDLActivity.onNativeSoftReturnKey()) {\n"
+        "                return true;\n"
+        "            }\n"
+        "            if (event.getAction() == KeyEvent.ACTION_DOWN) {\n"
+        "                SDLActivity.onNativeKeyDown(keyCode);\n"
+        "                return true;\n"
+        "            }\n"
+        "            if (event.getAction() == KeyEvent.ACTION_UP) {\n"
+        "                SDLActivity.onNativeKeyUp(keyCode);\n"
+        "                return true;\n"
+        "            }\n"
+        "        }\n"
+        "        if (keyCode == KeyEvent.KEYCODE_DEL) {\n"
+        "            if (event.getAction() == KeyEvent.ACTION_DOWN) {\n"
+        "                SDLActivity.onNativeKeyDown(keyCode);\n"
+        "                return true;\n"
+        "            }\n"
+        "            if (event.getAction() == KeyEvent.ACTION_UP) {\n"
+        "                SDLActivity.onNativeKeyUp(keyCode);\n"
+        "                return true;\n"
+        "            }\n"
+        "        }\n"
+    )
+    if old_enter not in text:
+        raise ValueError("Unsupported SDLInputConnection.sendKeyEvent layout")
+    text = text.replace(old_enter, new_enter, 1)
+    text = text.replace(
+        "                nativeGenerateScancodeForUnichar('\\b');\n",
+        "                SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_DEL);\n"
+        "                SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_DEL);\n",
+    )
+    path.write_text(text, encoding="utf-8", newline="\n")
