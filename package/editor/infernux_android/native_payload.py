@@ -59,7 +59,7 @@ def stage_native_payload(root: Path, staging: Path, *, abi: str) -> None:
         shutil.rmtree(java)
     shutil.copytree(root / "java/org/libsdl", java, ignore=shutil.ignore_patterns("*.meta"))
     _patch_sdl_input_connection(
-        java / "app/src/main/java/org/libsdl/app/SDLInputConnection.java"
+        java / "app/SDLInputConnection.java"
     )
 
 
