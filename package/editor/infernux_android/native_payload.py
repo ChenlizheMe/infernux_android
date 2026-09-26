@@ -61,6 +61,9 @@ def stage_native_payload(root: Path, staging: Path, *, abi: str) -> None:
     input_connection = next(java.rglob("SDLInputConnection.java"), None)
     if input_connection is not None:
         _patch_sdl_input_connection(input_connection)
+    activity = next(java.rglob("SDLActivity.java"), None)
+    if activity is not None:
+        _patch_sdl_activity(activity)
 
 
 def _patch_sdl_input_connection(path: Path) -> None:
@@ -113,3 +116,41 @@ def _patch_sdl_input_connection(path: Path) -> None:
         "                SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_DEL);\n",
     )
     path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def _patch_sdl_activity(path: Path) -> None:
+    """Make repeated SDL text-input shows reliable on current Android IMEs."""
+
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    if "imm.restartInput(mTextEdit);" in text:
+        return
+    old = (
+        "            InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);\n"
+        "            imm.showSoftInput(mTextEdit, 0);\n\n"
+        "            if (imm.isAcceptingText()) {\n"
+        "                onNativeScreenKeyboardShown();\n"
+        "            }\n"
+    )
+    new = (
+        "            final InputMethodManager imm = (InputMethodManager) getContext()\n"
+        "                    .getSystemService(Context.INPUT_METHOD_SERVICE);\n"
+        "            // Reset the reused hidden editor before every show. Some Android 13+\n"
+        "            // IMEs keep the old InputConnection after hide and ignore the next show.\n"
+        "            imm.restartInput(mTextEdit);\n"
+        "            // Defer until focus/layout have settled; inline show is ignored while a\n"
+        "            // previous hide is still completing on several vendor IMEs.\n"
+        "            mTextEdit.post(() -> {\n"
+        "                if (mTextEdit.getVisibility() != View.VISIBLE || !mTextEdit.hasFocus()) {\n"
+        "                    return;\n"
+        "                }\n"
+        "                imm.showSoftInput(mTextEdit, InputMethodManager.SHOW_IMPLICIT);\n"
+        "                if (imm.isAcceptingText()) {\n"
+        "                    onNativeScreenKeyboardShown();\n"
+        "                }\n"
+        "            });\n"
+    )
+    if old not in text:
+        raise ValueError("Unsupported SDLActivity.ShowTextInputTask layout")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
