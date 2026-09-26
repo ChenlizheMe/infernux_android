@@ -66,6 +66,8 @@ def stage_native_payload(root: Path, staging: Path, *, abi: str) -> None:
 def _patch_sdl_input_connection(path: Path) -> None:
     """Make Enter and Backspace explicit SDL key edges for Android IMEs."""
 
+    if not path.is_file():
+        return
     text = path.read_text(encoding="utf-8")
     if "SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_DEL)" in text:
         return
