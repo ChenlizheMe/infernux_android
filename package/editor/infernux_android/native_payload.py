@@ -58,9 +58,9 @@ def stage_native_payload(root: Path, staging: Path, *, abi: str) -> None:
     if java.exists():
         shutil.rmtree(java)
     shutil.copytree(root / "java/org/libsdl", java, ignore=shutil.ignore_patterns("*.meta"))
-    _patch_sdl_input_connection(
-        java / "app/SDLInputConnection.java"
-    )
+    input_connection = next(java.rglob("SDLInputConnection.java"), None)
+    if input_connection is not None:
+        _patch_sdl_input_connection(input_connection)
 
 
 def _patch_sdl_input_connection(path: Path) -> None:
