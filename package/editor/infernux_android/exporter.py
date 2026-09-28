@@ -7,9 +7,11 @@ import hashlib
 import importlib.util
 import json
 import os
+import py_compile
 import re
 import shutil
 import subprocess
+import sys
 import time
 import zipfile
 from pathlib import Path
@@ -865,7 +867,47 @@ def _stage_engine_python_package(
         packaging_destination,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyi"),
     )
+    _compile_android_runtime_bytecode(site_packages)
     request.report("analyze", 2, 2, "Android Player Python modules staged")
+
+
+def _compile_android_runtime_bytecode(site_packages: Path) -> None:
+    """Precompile the fixed Android CPython runtime import closure."""
+
+    host_series = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if host_series != _ANDROID_PYTHON_SERIES:
+        raise ValueError(
+            "Android Player bytecode must be built by CPython "
+            f"{_ANDROID_PYTHON_SERIES}, but the exporter is running {host_series}"
+        )
+
+    roots = (
+        site_packages / "Infernux",
+        site_packages / "packaging",
+        site_packages / "infernux.py",
+    )
+    sources = sorted(
+        (
+            source
+            for root in roots
+            for source in ([root] if root.is_file() else root.rglob("*.py"))
+        ),
+        key=lambda path: path.as_posix().casefold(),
+    )
+    for source in sources:
+        relative = source.relative_to(site_packages).as_posix()
+        try:
+            py_compile.compile(
+                str(source),
+                cfile=importlib.util.cache_from_source(str(source)),
+                dfile=relative,
+                doraise=True,
+                invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
+            )
+        except py_compile.PyCompileError as error:
+            raise ValueError(
+                f"Android Player runtime bytecode compilation failed: {relative}"
+            ) from error
 
 
 def _stage_host_template(source: Path, staging: Path) -> None:

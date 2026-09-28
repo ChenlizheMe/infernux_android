@@ -52,23 +52,11 @@ bool initialize_python()
     Py_DECREF(site_packages);
     Py_DECREF(native_path);
 
-    for (const char *module_name : {"json", "math", "zlib", "ssl", "numpy"}) {
-        PyObject *module = PyImport_ImportModule(module_name);
-        if (module == nullptr) {
-            PyErr_Print();
-            SDL_Log("Infernux Android host failed to import runtime module %s", module_name);
-            return false;
-        }
-        Py_DECREF(module);
-    }
-    if (PyRun_SimpleString("import numpy as _infernux_numpy\n"
-                           "assert int(_infernux_numpy.arange(4).sum()) == 6\n"
-                           "del _infernux_numpy\n") != 0) {
-        PyErr_Print();
-        SDL_Log("Infernux Android host failed the NumPy ndarray smoke test");
-        return false;
-    }
-    SDL_Log("INFERNUX_ANDROID_PYTHON_PACKAGES_READY numpy=available ndarray=ready");
+    // Runtime modules are audited during Cook and imported by their actual
+    // owners. Eagerly importing them here duplicated Player bootstrap work on
+    // every launch and delayed the first frame without strengthening the
+    // runtime contract.
+    SDL_Log("INFERNUX_ANDROID_PYTHON_PATH_READY");
 
     return true;
 }
