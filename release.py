@@ -16,10 +16,10 @@ def _require_native_payloads(root: Path) -> None:
     for abi, machine in (("arm64-v8a", 183), ("x86_64", 62)):
         directory = player / abi
         manifest = json.loads((directory / "Player.inxmanifest").read_text(encoding="utf-8"))
-        expected = {"engine_version": "0.4.0", "platform": "android", "abi": abi,
+        expected = {"engine_version": "0.4.1", "platform": "android", "abi": abi,
                     "python_abi": "cp313", "minimum_api": 26, "configuration": "Release"}
         if not isinstance(manifest, dict) or any(manifest.get(k) != v for k, v in expected.items()):
-            raise ValueError(f"Android {abi} payload must match the 0.4.0 Release contract")
+            raise ValueError(f"Android {abi} payload must match the 0.4.1 Release contract")
         declared = manifest.get("native_libraries")
         if (not isinstance(declared, list)
                 or any(not isinstance(name, str) for name in declared)

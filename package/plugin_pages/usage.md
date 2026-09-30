@@ -8,7 +8,7 @@ Build Android Players for ARM64 devices and x64 emulators. The package owns targ
 
 Native debug information is maintained separately from the plugin; runtime libraries retain their dynamic symbols. No user-side stripping or compilation is required.
 
-Install Infernux 0.4.0, Android compatibility in Hub, and the complete Android platform plugin. The plugin includes precompiled ARM64/x86_64 Player libraries and SDL Java host files. Normal APK/AAB exports do not require an engine source checkout, Git submodules, CMake, or host-side pybind11.
+Install Infernux 0.4.1, Android compatibility in Hub, and the complete Android platform plugin. The plugin includes precompiled ARM64/x86_64 Player libraries and SDL Java host files. Normal APK/AAB exports do not require an engine source checkout, Git submodules, CMake, or host-side pybind11.
 
 ## Shared dependencies
 
@@ -30,4 +30,4 @@ Gradle caches use Shared/Cache/Gradle under Hub, or the project's Cache/Gradle f
 
 ## Troubleshooting
 
-Disabled Import means Hub Android compatibility is not installed or incomplete. Resolve SDK, CPython, Gradle or incomplete plugin payload diagnostics before building; use a plugin release matching engine 0.4.0. If the Hub channel does not yet contain a compatible kit, this plugin Release cannot replace it.
+Disabled Import means Hub Android compatibility is not installed or incomplete. Resolve SDK, CPython, Gradle or incomplete plugin payload diagnostics before building; use a plugin release matching engine 0.4.1. If the Hub channel does not yet contain a compatible kit, this plugin Release cannot replace it.

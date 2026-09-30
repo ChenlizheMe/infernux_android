@@ -8,7 +8,7 @@
 
 原生调试信息由维护者独立保存，不进入插件；运行库保留动态符号。用户无需自行剥离符号或编译。
 
-安装 Infernux 0.4.0、Hub 安卓兼容及完整 Android 平台插件。插件包含 ARM64/x86_64 预编译 Player 库和 SDL Java 宿主文件。普通 APK/AAB 导出不需要引擎源码、Git 子模块、CMake 或宿主 pybind11。
+安装 Infernux 0.4.1、Hub 安卓兼容及完整 Android 平台插件。插件包含 ARM64/x86_64 预编译 Player 库和 SDL Java 宿主文件。普通 APK/AAB 导出不需要引擎源码、Git 子模块、CMake 或宿主 pybind11。
 
 ## 共享依赖
 
@@ -30,4 +30,4 @@ Gradle 缓存归 Hub 的 Shared/Cache/Gradle 管理，独立源码启动则使�
 
 ## 排错
 
-导入按钮禁用表示 Hub 安卓兼容尚未安装或不完整。先处理 SDK、CPython、Gradle 或插件载荷缺失诊断，确认插件制品匹配引擎 0.4.0。如果 Hub 渠道尚未发布兼容套件，仅安装此插件无法替代它。
+导入按钮禁用表示 Hub 安卓兼容尚未安装或不完整。先处理 SDK、CPython、Gradle 或插件载荷缺失诊断，确认插件制品匹配引擎 0.4.1。如果 Hub 渠道尚未发布兼容套件，仅安装此插件无法替代它。
