@@ -27,6 +27,9 @@ from Infernux.engine.build import (
     BuildRequest,
     BuildResult,
     BuildStep,
+    BuildOption,
+    BuildOptionChoice,
+    BuildOptionKind,
     BuildTarget,
     CapabilityReport,
     DiagnosticSeverity,
@@ -165,6 +168,66 @@ class AndroidPlatformExporter(PlatformExporter):
                 "arm64-v8a",
                 _ANDROID_CAPABILITIES,
             ),
+        )
+
+    def build_options(self, target):
+        if target.id not in {"android-arm64", "android-x64-emulator"}:
+            raise ValueError(f"Unsupported Android build target: {target.id}")
+        return (
+            BuildOption(
+                "android_artifact", "build.android_artifact", BuildOptionKind.ENUM,
+                "apk",
+                choices=(
+                    BuildOptionChoice("apk", "APK"),
+                    BuildOptionChoice("aab", "AAB"),
+                ),
+            ),
+            BuildOption(
+                "android_orientation", "build.android_orientation",
+                BuildOptionKind.ENUM, "landscape",
+                choices=(
+                    BuildOptionChoice("landscape", "build.android_orientation_landscape"),
+                    BuildOptionChoice("portrait", "build.android_orientation_portrait"),
+                    BuildOptionChoice("sensor", "build.android_orientation_sensor"),
+                ),
+            ),
+            BuildOption(
+                "android_resolution_scaling", "build.android_resolution_scaling",
+                BuildOptionKind.ENUM, "fixed_dpi",
+                choices=(
+                    BuildOptionChoice("fixed_dpi", "build.android_fixed_dpi"),
+                    BuildOptionChoice("disabled", "build.android_native_resolution"),
+                ),
+            ),
+            BuildOption(
+                "android_target_dpi", "build.android_target_dpi",
+                BuildOptionKind.INTEGER, 320, minimum=120, maximum=1000, step=10,
+                visible_when={"android_resolution_scaling": "fixed_dpi"},
+            ),
+            BuildOption("display_mode", "Display mode", BuildOptionKind.ENUM,
+                "fullscreen_borderless", choices=(
+                    BuildOptionChoice("fullscreen_borderless", "Fullscreen"),
+                ), editor_visible=False),
+            BuildOption("window_width", "Reference width", BuildOptionKind.INTEGER,
+                1280, minimum=1, editor_visible=False),
+            BuildOption("window_height", "Reference height", BuildOptionKind.INTEGER,
+                720, minimum=1, editor_visible=False),
+            BuildOption("window_resizable", "Resizable", BuildOptionKind.BOOLEAN,
+                False, editor_visible=False),
+            BuildOption("android_keystore", "Android keystore", BuildOptionKind.PATH,
+                "", editor_visible=False),
+            BuildOption("android_key_alias", "Android key alias", BuildOptionKind.STRING,
+                "", editor_visible=False),
+            BuildOption("android_keystore_password_env", "Keystore password environment",
+                BuildOptionKind.STRING, "", editor_visible=False),
+            BuildOption("android_key_password_env", "Key password environment",
+                BuildOptionKind.STRING, "", editor_visible=False),
+            BuildOption("android_python_prefix", "Android Python prefix",
+                BuildOptionKind.PATH, "", editor_visible=False),
+            BuildOption("build_cache_root", "Build cache root", BuildOptionKind.PATH,
+                "", editor_visible=False),
+            BuildOption("android_numpy_wheel", "Android NumPy wheel",
+                BuildOptionKind.PATH, "", editor_visible=False),
         )
 
     def doctor(self, request: BuildRequest) -> CapabilityReport:
@@ -1082,12 +1145,8 @@ def _android_orientation_contract(
     """Resolve one SDL/Activity orientation policy for this Android build."""
 
     configured = str(
-        request.profile.options.get("android_orientation", "auto") or "auto"
+        request.profile.options.get("android_orientation", "landscape") or "landscape"
     ).strip().casefold()
-    if configured == "auto":
-        width = int(settings["window_width"])
-        height = int(settings["window_height"])
-        configured = "landscape" if width >= height else "portrait"
     policies = {
         "landscape": ("LandscapeLeft LandscapeRight", "sensorLandscape"),
         "portrait": ("Portrait PortraitUpsideDown", "sensorPortrait"),
@@ -1100,7 +1159,7 @@ def _android_orientation_contract(
         return policies[configured]
     except KeyError as error:
         raise ValueError(
-            "android_orientation must be auto, landscape, portrait, or sensor"
+            "android_orientation must be landscape, portrait, or sensor"
         ) from error
 
 
