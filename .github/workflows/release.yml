@@ -6,6 +6,12 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing tag to build and publish (empty builds the selected revision only)
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -42,7 +48,7 @@ jobs:
       - name: Build this exact plugin revision in its owning subrepository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_tag || github.sha }}
           path: engine/external/plugins/infernux_android
       - uses: conda-incubator/setup-miniconda@v3
         with:
@@ -54,6 +60,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install release-engineering dependencies
         run: |
           conda activate infernux
@@ -90,11 +98,11 @@ jobs:
             engine/external/plugins/infernux_android/dist/infernux.platform-android.release.json
           if-no-files-found: error
       - name: Publish versioned plugin
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           conda activate infernux
           cd external/plugins/infernux_android
