@@ -18,6 +18,7 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(workspace.name) / "repository"
         source = Path(__file__).resolve().parents[1]
         shutil.copytree(source / "package", self.root / "package", ignore=shutil.ignore_patterns("player"))
+        metadata = json.loads((self.root / "package/inx_package.json").read_text(encoding="utf-8"))
         self.player = self.root / "package/editor/infernux_android/player"
         libraries = run_path(str(self.player.parent / "native_payload.py"))["NATIVE_LIBRARIES"]
         for abi, machine in (("arm64-v8a", 183), ("x86_64", 62)):
@@ -27,7 +28,7 @@ class ReleaseTests(unittest.TestCase):
             for name in libraries:
                 (native / name).write_bytes(header)
             (native.parent / "Player.inxmanifest").write_text(json.dumps({
-                "engine_version": "0.4.1", "platform": "android", "abi": abi,
+                "engine_version": metadata["engine"].removeprefix("=="), "platform": "android", "abi": abi,
                 "python_abi": "cp313", "minimum_api": 26, "configuration": "Release",
                 "native_libraries": list(libraries),
             }), encoding="utf-8")
