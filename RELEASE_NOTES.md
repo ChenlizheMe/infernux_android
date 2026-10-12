@@ -1,8 +1,8 @@
-# 0.2.7 — Infernux 0.4.2
+# 0.2.8 — Infernux 0.4.2
 
 - Publish the exporter and matching precompiled Player payload for Infernux 0.4.2.
 - Include the current portable assets, scene lifecycle, physics, rendering and compute fixes.
-- Require exactly Infernux 0.4.2 so native payloads cannot be installed into a different engine version.
+- Declare Infernux >=0.4.2 compatibility; this publication includes the Player payload built with Infernux 0.4.2.
 
 # 0.2.3 — Infernux 0.4.1
 
