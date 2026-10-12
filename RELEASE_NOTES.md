@@ -1,32 +1,6 @@
-# 0.2.8 — Infernux 0.4.2
+# 0.2.9 — Infernux 0.4.2 revision 2
 
-- Publish the exporter and matching precompiled Player payload for Infernux 0.4.2.
-- Include the current portable assets, scene lifecycle, physics, rendering and compute fixes.
-- Declare Infernux >=0.4.2 compatibility; this publication includes the Player payload built with Infernux 0.4.2.
-
-# 0.2.3 — Infernux 0.4.1
-
-- Publish the current exporter and precompiled Player payload for Infernux 0.4.1.
-- Include the 041 scene, asset, UI, compute, input and lifecycle fixes from the pinned engine sources.
-- Require Infernux 0.4.1 so old native payloads cannot be installed into the new engine.
-
-# Infernux Android Platform 0.2.2
-
-Official platform package for Infernux ==0.4.0.
-
-- Routes system Back through the Player's keyboard-dismissal/gameplay policy before IME callbacks, including callbacks left behind after the keyboard is hidden.
-- Separates native debug information during CMake publication. Runtime dynamic symbols are retained; separate debug files remain in the release-engineering build tree, outside the installable plugin.
-
-- Ships precompiled ARM64 and x86_64 native Players plus the SDL Java host.
-- Assembles APK/AAB exports without engine sources, CMake or native compilation.
-- Reads each game's orientation policy at runtime.
-- Includes English and Simplified Chinese documentation with a build workflow illustration.
-- Ships an installable InxPackage and the engine's compatible-release manifest.
-
-## Requirements
-
-Install Infernux 0.4.0, Android compatibility in Hub, and the complete Android platform plugin. The plugin includes precompiled ARM64/x86_64 Player libraries and SDL Java host files. Normal APK/AAB exports do not require an engine source checkout, Git submodules, CMake, or host-side pybind11.
-
-Install Android compatibility through Hub before importing. The large Android Platform Kit is distributed separately through the Hub channel; this release does not include that kit.
-
-Download the .inxpkg asset to install the plugin. The automatic source archives are for plugin development. See the README for setup, output and troubleshooting details.
+- Publish the exporter and precompiled Player payload built with Infernux 0.4.2-v2.
+- Preserve the exact engine-release check for precompiled runtimes.
+- Keep the package engine requirement >=0.4.2.
+- Publish new immutable artifacts; earlier package releases remain unchanged.
