@@ -15,7 +15,7 @@
 
 | 包标识 | 版本 | 适配引擎 | 构建环境 | 目标平台 |
 | --- | --- | --- | --- | --- |
-| `infernux/platform-android` | 0.2.9 | Infernux >=0.4.2; payload 0.4.2-v2 | Windows/Linux x64 | Android ARM64/x64 |
+| `infernux/platform-android` | 0.2.10 | Infernux >=0.4.2; payload 0.4.2 | Windows/Linux x64 | Android ARM64/x64 |
 
 ## 安装与导出
 
