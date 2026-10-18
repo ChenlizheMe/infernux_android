@@ -231,6 +231,9 @@ class AndroidPlatformExporter(PlatformExporter):
         )
 
     def doctor(self, request: BuildRequest) -> CapabilityReport:
+        from infernux.plugins.platform_support import activate_android_support_environment
+
+        activate_android_support_environment()
         toolchain = inspect_android_toolchain(request.target)
         if not toolchain.available:
             return toolchain
@@ -243,16 +246,13 @@ class AndroidPlatformExporter(PlatformExporter):
         python_prefix = _python_prefix(request, abi)
         details = dict(toolchain.details)
         if python_prefix is None:
-            suffix = "X86_64" if abi == "x86_64" else "ARM64"
             return CapabilityReport(
                 False,
                 (
                     BuildDiagnostic(
                         DiagnosticSeverity.ERROR,
                         "android.python.runtime-missing",
-                        "Install an Android CPython 3.13 runtime, then set "
-                        "android_python_prefix in the build profile or "
-                        f"INFERNUX_ANDROID_PYTHON_PREFIX_{suffix}.",
+                        "Android CPython 3.13 is missing. Repair Android compatibility in Infernux Hub.",
                         source=self.exporter_id,
                         detail={"abi": abi},
                     ),

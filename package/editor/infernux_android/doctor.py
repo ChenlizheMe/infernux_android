@@ -13,6 +13,7 @@ from infernux.engine.build import (
     CapabilityReport,
     DiagnosticSeverity,
 )
+from infernux.plugins.platform_support import android_support_root
 
 
 ANDROID_API = 36
@@ -39,6 +40,7 @@ def inspect_android_toolchain(
         "jdk_major": ANDROID_JDK_MAJOR,
         "android_gradle_plugin_version": ANDROID_GRADLE_PLUGIN,
         "gradle_version": GRADLE_VERSION,
+        "android_support_root": str(android_support_root(values) or ""),
     }
 
     sdk_root = _environment_path(values, "ANDROID_SDK_ROOT", "ANDROID_HOME")
@@ -50,7 +52,7 @@ def inspect_android_toolchain(
         diagnostics.append(
             _error(
                 "android.sdk.environment",
-                "Set ANDROID_SDK_ROOT to the Android SDK directory.",
+                "Install Android compatibility in Infernux Hub before building an Android Player.",
             )
         )
     else:
@@ -89,7 +91,7 @@ def inspect_android_toolchain(
 
     if java_home is None:
         diagnostics.append(
-            _error("android.jdk.environment", "Set JAVA_HOME to a JDK 17 directory.")
+            _error("android.jdk.environment", "Repair Android compatibility in Infernux Hub: JDK 17 is missing.")
         )
     else:
         java = java_home / "bin" / _executable("java")

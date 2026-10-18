@@ -12,7 +12,9 @@ Install Infernux 0.4.2, Android compatibility in Hub, and the complete Android p
 
 ## Shared dependencies
 
-Install **Android compatibility** in **Hub → Installations** before importing the plugin. The editor keeps Import disabled until the shared kit is installed. This prerequisite is deliberate, not an import-time download of SDKs. The kit is distributed through the Hub release channel separately from this plugin's Release assets; plugin publication does not publish the kit.
+Install or update the plugin directly from the editor's plugin manager. It downloads and imports the complete package automatically; installing a plugin does not require an Android toolchain.
+
+Before exporting an APK/AAB, install **Android compatibility** in **Hub → Installations**. Hub manages the shared SDK, JDK, Gradle and Python runtimes and passes their locations to the editor, including custom Hub installations. These tools are installed once for all projects; do not download or configure them individually.
 
 The current kit uses JDK 17, Gradle 8.12, Android API 36, build-tools 36.0.0, NDK 29.0.14206865 and both Android CPython 3.13 target runtimes. An emulator and AVD are separate from a physical-device build.
 
@@ -30,4 +32,4 @@ Gradle caches use Shared/Cache/Gradle under Hub, or the project's Cache/Gradle f
 
 ## Troubleshooting
 
-Disabled Import means Hub Android compatibility is not installed or incomplete. Resolve SDK, CPython, Gradle or incomplete plugin payload diagnostics before building; use a plugin release matching engine 0.4.2. If the Hub channel does not yet contain a compatible kit, this plugin Release cannot replace it.
+Plugin installation and toolchain readiness are independent. Build diagnostics identify missing SDK, CPython, Gradle or Player files with their resolved paths. Manage shared build tools through Hub and use a complete platform plugin release compatible with the engine. Plugin installation and update failures are recorded in the editor Console.
