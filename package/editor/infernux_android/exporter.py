@@ -496,10 +496,15 @@ class AndroidPlatformExporter(PlatformExporter):
         gradle = Path(str(details["gradle"]))
         task_prefix = "bundle" if artifact_kind == "aab" else "assemble"
         task = f":app:{task_prefix}{configuration_name}"
+        tasks = [task]
+        if artifact_kind == "apk":
+            # Incremental APK replacement leaves holes when cooked content grows.
+            # Repack the archive while retaining compiled Java and merged inputs.
+            tasks = [f":app:package{configuration_name}", "--rerun", task]
         request.report("compile", 0, 1, f"Running Gradle {task}", abi=abi)
         return_code, gradle_logs = _run_command(
             request,
-            [str(gradle), "-p", str(staging), "--console=plain", task],
+            [str(gradle), "-p", str(staging), "--console=plain", *tasks],
             staging,
             _android_gradle_environment(
                 request,
