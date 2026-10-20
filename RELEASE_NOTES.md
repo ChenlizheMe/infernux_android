@@ -1,3 +1,8 @@
+# 0.2.12 — Infernux 0.4.3
+
+- Rebuild the complete Player payload against the final 0.4.3 engine source, including asset import-failure publication.
+- Keep the engine requirement >=0.4.3.
+
 # 0.2.11 — Infernux 0.4.3
 
 - Rebuild both precompiled Android ABIs with Infernux 0.4.3.

@@ -15,7 +15,7 @@ The official Android build plugin for [Infernux](https://github.com/ChenlizheMe/
 
 | Package | Version | Compatible engine | Build hosts | Targets |
 | --- | --- | --- | --- | --- |
-| `infernux/platform-android` | 0.2.11 | Infernux >=0.4.3; payload 0.4.3 | Windows/Linux x64 | Android ARM64/x64 |
+| `infernux/platform-android` | 0.2.12 | Infernux >=0.4.3; payload 0.4.3 | Windows/Linux x64 | Android ARM64/x64 |
 
 ## Install and use
 
