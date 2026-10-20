@@ -10,16 +10,16 @@ from runpy import run_path
 import package
 
 
-def _require_native_payloads(root: Path) -> None:
+def _require_native_payloads(root: Path, engine_version: str) -> None:
     player = root / "package/editor/infernux_android/player"
     libraries = run_path(str(player.parent / "native_payload.py"))["NATIVE_LIBRARIES"]
     for abi, machine in (("arm64-v8a", 183), ("x86_64", 62)):
         directory = player / abi
         manifest = json.loads((directory / "Player.inxmanifest").read_text(encoding="utf-8"))
-        expected = {"engine_version": "0.4.2", "platform": "android", "abi": abi,
+        expected = {"engine_version": engine_version, "platform": "android", "abi": abi,
                     "python_abi": "cp313", "minimum_api": 26, "configuration": "Release"}
         if not isinstance(manifest, dict) or any(manifest.get(k) != v for k, v in expected.items()):
-            raise ValueError(f"Android {abi} payload must match the 0.4.2 Release contract")
+            raise ValueError(f"Android {abi} payload must match the {engine_version} Release contract")
         declared = manifest.get("native_libraries")
         if (not isinstance(declared, list)
                 or any(not isinstance(name, str) for name in declared)
@@ -44,7 +44,7 @@ def build_release(tag: str | None = None, output: Path | None = None) -> tuple[P
         tag = expected
     if tag != expected:
         raise ValueError(f"Release tag must match package version: {expected}")
-    _require_native_payloads(root)
+    _require_native_payloads(root, metadata["engine"].removeprefix(">="))
     destination = output if output is not None else root / "dist"
     destination.mkdir(parents=True, exist_ok=True)
     stem = metadata["reference"].replace("/", ".")
