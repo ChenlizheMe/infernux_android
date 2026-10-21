@@ -884,8 +884,11 @@ def _stage_engine_python_package(
     source_package: Path,
 ) -> None:
     """Stage shared Player Python modules from the installed engine package."""
+    from infernux.engine.player_dependencies import stage_engine_licenses
+
     if not (source_package / "engine" / "platform_player_bootstrap.py").is_file():
         raise ValueError(f"Infernux Player Python sources are incomplete: {source_package}")
+    stage_engine_licenses(staging / "app" / "src" / "main" / "assets" / "licenses" / "infernux")
     site_packages = staging / "app" / "src" / "main" / "assets" / "python" / "site-packages"
     destination = site_packages / "infernux"
     request.report("analyze", 0, 2, "Staging Infernux Android Player modules")
