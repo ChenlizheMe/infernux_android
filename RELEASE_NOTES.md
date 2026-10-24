@@ -1,3 +1,9 @@
+# 0.2.16 — Infernux 0.4.3-v5
+
+- Rebuild both Android Player ABIs (arm64-v8a and x86_64) against Infernux 0.4.3-v5.
+- Build from frozen engine commit `f683bfa678eb680748c20be91badb9fe668ec553`.
+- Keep the package engine requirement `>=0.4.3`; precompiled Players require the exact matching engine release.
+
 # 0.2.12 — Infernux 0.4.3
 
 - Rebuild the complete Player payload against the final 0.4.3 engine source, including asset import-failure publication.
