@@ -1,3 +1,9 @@
+# 0.2.20 — Infernux 0.4.3-v8
+
+- Build the complete Player payload from frozen engine commit `e57387c0b65fa0b4838341faafa0572d100e8411`.
+- Match the 0.4.3-v8 SDK, including reversed-Z rendering, isolated camera globals and repaired custom sky depth.
+- Retain the package engine requirement `>=0.4.3`; precompiled Players require the exact matching engine release.
+
 # 0.2.18 — Infernux 0.4.3-v5 UI shader dependency recovery
 
 - Rebuild from frozen engine commit `ed45567cdceda66bfc7d762a9e0f0bb36c778ebb`.
